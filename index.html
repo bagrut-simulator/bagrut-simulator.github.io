@@ -2034,27 +2034,79 @@ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg
 // לתעד למי הרישיון הונפק, ולמנוע העברה מזדמנת בין מוסדות.
 let licName='', licKey='';
 try{ licName=LS.getItem('bagrutLicName')||''; licKey=LS.getItem('bagrutLicKey')||''; }catch(e){}
-function licExpected(nm){
-  const s='HRL\u00b7'+licNorm(nm);
+/* מבנה המפתח: 12 תווים.
+   3 הראשונים — קוד חודש התפוגה (בסיס 36, חודשים מאז ינואר 2020).
+   9 הבאים    — גיבוב של שם המוסד יחד עם קוד החודש.
+   כך המפתח נושא את התפוגה בתוך עצמו, והרכזת מקלידה מחרוזת אחת בלבד. */
+const LIC_EPOCH_Y=2020;
+function licHash(s){
   let a=0x811c9dc5;
   for(let i=0;i<s.length;i++){ a^=s.charCodeAt(i); a=Math.imul(a,0x01000193)>>>0; }
   let b=0x2166136b;
   for(let i=s.length-1;i>=0;i--){ b^=s.charCodeAt(i); b=Math.imul(b,0x85ebca6b)>>>0; }
-  const raw=(a.toString(36)+b.toString(36)).toUpperCase().replace(/[^A-Z0-9]/g,'');
-  return (raw+'XXXXXXXXXXXX').slice(0,12).replace(/(.{4})(.{4})(.{4})/,'$1-$2-$3');
+  let c=0x9e3779b9;
+  for(let i=0;i<s.length;i++){ c=Math.imul(c^s.charCodeAt(i),0xc2b2ae35)>>>0; }
+  return (a.toString(36)+b.toString(36)+c.toString(36)).toUpperCase().replace(/[^A-Z0-9]/g,'');
 }
-function isLicensed(){ return !!licName && licKey===licExpected(licName); }
+function licMonthCode(y,m){                       // m: 1-12
+  const n=(y-LIC_EPOCH_Y)*12+(m-1);
+  return ('00'+Math.max(0,n).toString(36).toUpperCase()).slice(-3);
+}
+function licCodeToDate(code){
+  const n=parseInt(String(code),36);
+  if(!isFinite(n)||n<0) return null;
+  const y=LIC_EPOCH_Y+Math.floor(n/12), m=(n%12)+1;
+  return {y,m,end:new Date(y,m,1,0,0,0,0).getTime()-1};   // סוף החודש הנקוב
+}
+/* המפתח המלא עבור מוסד ותאריך */
+function licMake(nm,y,m){
+  const code=licMonthCode(y,m);
+  const raw=(licHash('HRL\u00b7'+code+'\u00b7'+licNorm(nm))+'XXXXXXXXX').slice(0,9);
+  return (code+raw).replace(/(.{4})(.{4})(.{4})/,'$1-$2-$3');
+}
+function licParse(key){
+  const k=String(key||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(k.length!==12) return null;
+  const code=k.slice(0,3), d=licCodeToDate(code);
+  if(!d) return null;
+  return {code,exp:d.end,y:d.y,m:d.m,body:k.slice(3)};
+}
+/* האם המפתח תואם לשם המוסד — בלי קשר לתאריך */
+function licValidFor(nm,key){
+  const p=licParse(key); if(!p) return null;
+  const want=(licHash('HRL\u00b7'+p.code+'\u00b7'+licNorm(nm))+'XXXXXXXXX').slice(0,9);
+  return p.body===want?p:null;
+}
+/* שעון שהוזז אחורה לא מאריך רישיון: שומרים את הזמן המקסימלי שנראה אי־פעם */
+function nowGuarded(){
+  const t=Date.now();
+  let mx=0; try{ mx=+(LS.getItem('bagrutMaxSeen')||0); }catch(e){}
+  if(t>mx){ try{ LS.setItem('bagrutMaxSeen',String(t)); }catch(e){} idbSet('maxSeen',t); return t; }
+  return mx;
+}
+function licInfo(){ return licName?licValidFor(licName,licKey):null; }
+function isLicensed(){ const p=licInfo(); return !!p && nowGuarded()<=p.exp; }
+function licExpiredKey(){ const p=licInfo(); return !!p && nowGuarded()>p.exp; }
+function licDaysLeft(){ const p=licInfo(); return p?Math.ceil((p.exp-nowGuarded())/86400000):0; }
+function licExpText(){ const p=licInfo(); if(!p) return '';
+  return new Date(p.y,p.m-1,1).toLocaleDateString('he-IL',{month:'long',year:'numeric'}); }
 function activateLic(){
   const nm=prompt('שם המוסד שהרישיון הונפק עבורו (בדיוק כפי שנמסר):',licName||schoolName||'');
   if(nm===null) return;
   const k=prompt('מפתח הרישיון (12 תווים, בפורמט XXXX-XXXX-XXXX):',licKey||'');
   if(k===null) return;
   const nn=licNorm(nm), kk=k.trim().toUpperCase().replace(/\s/g,'');
-  if(kk!==licExpected(nn)){ alert('❌ המפתח אינו תואם לשם המוסד.\n\nודאו שהשם הוקלד בדיוק כפי שנמסר, כולל רווחים.'); return; }
+  const p=licValidFor(nn,kk);
+  if(!p){ alert('❌ המפתח אינו תואם לשם המוסד.\n\nודאו שהשם הוקלד בדיוק כפי שנמסר, כולל רווחים.'); return; }
+  if(nowGuarded()>p.exp){
+    alert('⚠️ הקוד תקין אך תוקפו פג ב-'+new Date(p.y,p.m-1,1).toLocaleDateString('he-IL',{month:'long',year:'numeric'})+'.\n\nיש לפנות לספק לקבלת קוד מחודש.');
+    return;
+  }
   licName=nn; licKey=kk;
   try{ LS.setItem('bagrutLicName',nn); LS.setItem('bagrutLicKey',kk); }catch(e){}
   if(!schoolName) setSchoolName(nn);
-  licRefresh(); render(); alert('✅ הרישיון הופעל עבור: '+nn);
+  licRefresh(); render();
+  alert('✅ הרישיון הופעל עבור: '+nn+'\n\nבתוקף עד סוף '+licExpText()+'.');
 }
 function removeLic(){
   if(!confirm('להסיר את הרישיון מהמכשיר הזה?')) return;
@@ -5292,7 +5344,7 @@ function renderSettings(m){
 
   ${sGrp('shield','רישיון ואבטחה')}
   ${sCard('lic','lock','רישיון',
-    'מצב הרישיון של המוסד והזנת קוד הפעלה. הרישיון לתמיד, בלי תאריך תפוגה.',
+    'מצב הרישיון של המוסד, מועד התפוגה שלו והזנת קוד הפעלה או חידוש.',
     `<span class="badge ${st==='licensed'?'b-ok':(st==='trial'?'b-warn':'b-bad')}">${st==='licensed'?'פעיל':(st==='trial'?trialDaysLeft()+' ימי התנסות':'נגמרה')}</span>`,
     licPanelHtml())}
 
@@ -5971,7 +6023,7 @@ function loadDemo(){
 
 /* ============ רישוי: התנסות 14 יום ואז חסימה ============
    הקוד נגזר משם המוסד, ולכן ניתן להנפיק אותו מחדש בכל רגע — אין מה "לאבד".
-   הרישיון לתמיד: אין תאריך תפוגה. */
+   הרישיון תקופתי: תאריך התפוגה מקודד בתוך המפתח עצמו. */
 const TRIAL_DAYS=14;
 const DAY=86400000;
 function licNorm(s){ return String(s||'').replace(/\s+/g,' ').trim(); }
@@ -5992,15 +6044,21 @@ async function trialSyncIdb(){
 function trialDaysLeft(){ return Math.max(0,TRIAL_DAYS-Math.floor((Date.now()-trialStart())/DAY)); }
 function licStatus(){
   if(isLicensed()) return 'licensed';
+  if(licExpiredKey()) return 'licexp';               // רישיון שהיה ופג — לא חוזרים להתנסות
   return trialDaysLeft()>0?'trial':'expired';
 }
-function licBlocked(){ return licStatus()==='expired'; }
+function licBlocked(){ const s=licStatus(); return s==='expired'||s==='licexp'; }
 
 function showLicWall(){
   const el=document.getElementById('licWall'); if(!el) return;
   el.style.display='flex';
+  const expired=licExpiredKey();
+  const ttl=document.getElementById('licWallTtl');
+  if(ttl) ttl.textContent=expired?'תוקף הרישיון הסתיים':'תקופת ההתנסות הסתיימה';
   const sub=document.getElementById('licWallSub');
-  if(sub) sub.innerHTML=`ההתנסות של ${TRIAL_DAYS} ימים הסתיימה. להמשך העבודה יש להזין את קוד הרישיון של המוסד.`;
+  if(sub) sub.innerHTML=expired
+    ? `הרישיון של <b>${esc(licName)}</b> היה בתוקף עד סוף ${esc(licExpText())}. לחידוש — פנו לספק וקבלו קוד מעודכן.`
+    : `ההתנסות של ${TRIAL_DAYS} ימים הסתיימה. להמשך העבודה יש להזין את קוד הרישיון של המוסד.`;
   const nm=document.getElementById('licWallName');
   if(nm&&!nm.value) nm.value=licName||schoolName||'';
   setTimeout(()=>{ const i=document.getElementById('licWallKey'); if(i) i.focus(); },140);
@@ -6012,7 +6070,9 @@ function wallActivate(){
   const err=document.getElementById('licWallErr');
   if(!nn){ err.textContent='נא להזין את שם המוסד'; return; }
   if(!kk){ err.textContent='נא להזין את הקוד'; return; }
-  if(kk!==licExpected(nn)){ err.textContent='הקוד אינו תואם לשם המוסד — ודאו שהשם הוקלד בדיוק כפי שנמסר'; return; }
+  const pW=licValidFor(nn,kk);
+  if(!pW){ err.textContent='הקוד אינו תואם לשם המוסד — ודאו שהשם הוקלד בדיוק כפי שנמסר'; return; }
+  if(nowGuarded()>pW.exp){ err.textContent='הקוד תקין אך תוקפו פג ב-'+new Date(pW.y,pW.m-1,1).toLocaleDateString('he-IL',{month:'long',year:'numeric'})+' — נדרש קוד מחודש'; return; }
   licName=nn; licKey=kk;
   LS.setItem('bagrutLicName',nn); LS.setItem('bagrutLicKey',kk);
   if(!schoolName) setSchoolName(nn);
@@ -6023,6 +6083,15 @@ function wallActivate(){
 function renderLicBar(){
   const el=document.getElementById('licBar'); if(!el) return;
   const st=licStatus();
+  if(st==='licensed'){
+    const d=licDaysLeft();
+    if(d>30){ el.style.display='none'; return; }      // מזכירים רק בחודש האחרון
+    el.style.display='flex';
+    el.className=d<=7?'licBar urgent':'licBar';
+    el.innerHTML=`<span class="licIco">${ic('clock',18)}</span>
+      <span class="licTxt"><b>הרישיון פג בעוד ${d} ימים</b> — בסוף ${esc(licExpText())}. לחידוש פנו לספק. הנתונים יישמרו במלואם.</span>`;
+    return;
+  }
   if(st!=='trial'){ el.style.display='none'; return; }
   const d=trialDaysLeft();
   if(d>7){ el.style.display='none'; return; }
@@ -6038,10 +6107,19 @@ function licRefresh(){
 }
 function licPanelHtml(){
   const st=licStatus();
-  if(st==='licensed') return `<span class="badge b-ok">רישיון פעיל</span>
+  if(st==='licensed'){
+    const d=licDaysLeft();
+    return `<span class="badge ${d<=30?'b-warn':'b-ok'}">רישיון פעיל</span>
     <b style="margin-inline-start:6px;">${esc(licName)}</b>
-    <span class="note" style="margin-inline-start:8px;">רישיון לתמיד — ללא תאריך תפוגה.</span>
+    <span class="note" style="margin-inline-start:8px;">בתוקף עד סוף <b>${esc(licExpText())}</b> · נותרו ${d} ימים.
+      ${d<=30?'כדאי לחדש מול הספק.':''}</span>
+    <button class="btn sec sm" style="margin-inline-start:8px;" onclick="activateLic()">הזנת קוד מחודש</button>
     <button class="btn dz sm" style="margin-inline-start:8px;" onclick="removeLic()">הסרת הרישיון</button>`;
+  }
+  if(st==='licexp') return `<span class="badge b-bad">תוקף הרישיון הסתיים</span>
+    <b style="margin-inline-start:6px;">${esc(licName)}</b>
+    <span class="note" style="margin-inline-start:8px;">היה בתוקף עד סוף ${esc(licExpText())}.</span>
+    <button class="btn ok sm" style="margin-inline-start:8px;" onclick="activateLic()">הזנת קוד מחודש</button>`;
   const d=trialDaysLeft();
   if(st==='trial') return `<span class="badge ${d<=3?'b-bad':'b-warn'}">התנסות — נותרו ${d} מתוך ${TRIAL_DAYS} ימים</span>
     <button class="btn ok sm" style="margin-inline-start:8px;" onclick="activateLic()">הזנת קוד רישיון</button>
@@ -6182,7 +6260,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='11.1';
+const APP_VERSION='11.4';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -7096,7 +7174,11 @@ function renderHelp(m){
     <b>הפעולה היחידה שמעבירה</b> היא "העברה לטבלה האמיתית" — כפתור בורדו נפרד בתחתית מסך הסימולציה, עם אישור כפול שמפרט את שמות התלמידות. עד גרסה 8.3 הוא היה כפתור ירוק בראש המסך וקל היה ללחוץ עליו בטעות.<br>
         <b>"שיניתי חלוקת מגן/בחינה ולא קרה כלום"</b> — כנראה לתלמידות יש <b>התאמה אישית</b> ברכיב הזה, והיא <b>תמיד גוברת</b> על ברירת המחדל. בהגדרות ← שינוי גורף מופיעה אזהרה "N עם התאמה אישית" ולידה כפתור <b>"כפה על כולן"</b> שמוחק את ההתאמות ומשווה את כולן. הכפתור <b>"ברירת מחדל"</b> משנה את המקצוע בכל רמות היח"ל — וזו הפעולה הרגילה.<br>
         <b>"מיון וסינון"</b> — בראש הזנת הציונים, הסימולציה והדוחות יש סרגל: <b>יח"ל</b> (במקצוע שנבחר), <b>מלאות/חסרות</b>, <b>סטטוס</b> (מצטיינות, פוטנציאל, זכאיות, מעכבים, גבוליות), ומיון לפי שם / כיתה / יח"ל. כשסינון פעיל מוצג "מוצגות 12 מתוך 41" וכפתור ניקוי — כדי שלא ייווצר רושם שנתונים נעלמו. <b>שימו לב:</b> פעולות גורפות (צביעה, סמל שאלון) והייצוא לאקסל, ההדפסה והמייל — כולם עובדים על <b>מה שמוצג בפועל</b>. זה בכוונה: מסנן ומחיל = בדיוק מה שרואים.<br>
-        <b>"רישיון והתנסות"</b> — התוכנה פתוחה לגמרי 14 יום. מיום 7 מופיע פס תזכורת, ובתום ההתנסות נדרש קוד רישיון של המוסד. <b>הנתונים אינם נמחקים בשום שלב</b>, וגיבוי לקובץ פתוח גם במסך הנעילה. הקוד נגזר משם המוסד ולכן אינו יכול "לאבד" — הספק מנפיק אותו מחדש בכל רגע. הרישיון לתמיד, בלי תאריך תפוגה.<br>
+        <b>"רישיון והתנסות"</b> — התוכנה פתוחה לגמרי 14 יום. מיום 7 מופיע פס תזכורת, ובתום ההתנסות נדרש קוד רישיון של המוסד.
+        הרישיון <b>תקופתי</b>: תאריך התפוגה מקודד בתוך הקוד עצמו ומוצג בהגדרות. בחודש האחרון מופיעה תזכורת חידוש,
+        ובתום התקופה נדרש קוד מעודכן — שהספק מנפיק מיידית.
+        <b>הנתונים אינם נמחקים בשום שלב</b>, וגיבוי לקובץ פתוח גם במסך הנעילה.
+        הקוד נגזר משם המוסד וממועד התפוגה, ולכן אינו יכול "לאבד" — הספק מנפיק אותו מחדש בכל רגע.<br>
     <b>"צריך מקצוע שאינו ברשימה"</b> — יש 3 משבצות פתוחות למקצועות מוגברים והתמחויות: בכרטיס התלמיד/ה כותבים את שם המקצוע (פיזיקה, ביולוגיה, תקשורת…) ובוחרים יח"ל ומשקלים. למקצוע עם מבנה חריג — פנו לספק.<br>
         <b>"התוכנה מדברת בלשון נקבה — יש לנו בנים"</b> — <b>הגדרות ← לשון פנייה</b>. שלוש בחירות נפרדות: לשון התלמידות (נקבה / זכר / מעורב), לשון הפנייה אליך (נקבה / זכר / "לחצו"), ושם התפקיד (רכזת / רכז). בבית ספר מעורב מוצגת לשון זכר רבים — צורת הרבים התקנית לקבוצה מעורבת — וכשמדובר בתלמיד אחד: "תלמיד/ה". ההגדרה חלה על כל המסכים, הדוחות והייצוא לאקסל.<br>
         <b>"איך אני מקבלת גרסה חדשה?"</b> — אוטומטית. התוכנה בודקת פעם ביום אם עלתה גרסה חדשה, ואם כן מופיע פס ירוק בראש המסך: <b>עדכון עכשיו</b>. לחיצה אחת — והתוכנה נטענת מחדש מעודכנת. <b>הכיתות והציונים נשמרים</b>; הם מאוחסנים לפי כתובת האתר, לא בתוך הקובץ. לבדיקה ידנית יש <b>שתי דרכים</b>: <b>☰ תפריט</b> (בכותרת, מימין לחיפוש) ← <b>בדיקת עדכון</b> — זמין מכל מסך; או <b>הגדרות</b> ← הכרטיס עם המסגרת הירוקה <b>"מצב השמירה, גיבוי ועדכוני גרסה"</b> (הכרטיס השלישי מ<b>למעלה</b>) ← <b>בדיקת עדכון</b>.<br>
