@@ -1352,7 +1352,7 @@ function showTruncated(){
     <div id="lockErr" style="color:var(--bad); font-size:12.5px; font-weight:700; height:18px; margin-top:8px;"></div>
     <button class="btn" style="width:100%; margin-top:6px; padding:12px;" onclick="tryUnlock()">כניסה</button>
     <button class="btn sec" style="width:100%; margin-top:10px;" onclick="forgotPass()">🔑 שכחתי סיסמה — כניסה עם קוד שחזור</button>
-    <div class="note" style="margin-top:12px; font-size:11.5px;">קוד השחזור נמצא בקובץ שירד בעת הפעלת הנעילה, וגם בתוך כל קובץ גיבוי. <b>הנתונים לעולם לא נמחקים בגלל סיסמה שנשכחה.</b></div>
+    <div class="note" style="margin-top:12px; font-size:11.5px;">קוד השחזור נמצא בקובץ שירד בעת הפעלת הנעילה, וגם בכל קובץ גיבוי שנוצר <b>לאחר</b> הפעלת הנעילה — פתחו אותו וחפשו <code>"rec"</code>. <b>הנתונים לעולם לא נמחקים בגלל סיסמה שנשכחה.</b></div>
   </div>
 </div>
 <div id="cfModal" onclick="if(event.target===this)this.classList.remove('show')"><div class="box" id="cfBox"></div></div>
@@ -1648,12 +1648,10 @@ function setGradeSim(id,key,val){
   const st=state.students.find(s=>s.id===id); if(!st) return;
   calcOn=false;   // ההקלדה מבטלת את המחשבון הכבד — מפעילים אותו מחדש בלחיצה
   st.simg=st.simg||{};
-  if(val===''||val===null){ delete st.simg[key]; }
-  else{
-    const v=Math.max(0,Math.min(100,+val));
-    if((st.grades||{})[key]===v) delete st.simg[key]; // חזרה לערך האמיתי = ביטול השינוי
-    else st.simg[key]=v;
-  }
+  const v=gradeOr(val);
+  if(v===undefined){ delete st.simg[key]; }
+  else if((st.grades||{})[key]===v){ delete st.simg[key]; }   // חזרה לערך האמיתי = ביטול השינוי
+  else st.simg[key]=v;
   save();
   const modal=document.getElementById('studentModal');
   if(modal&&modal.classList.contains('show')) refreshOpenViews(id);
@@ -1721,7 +1719,10 @@ async function idbGet(k){ try{ const db=await idb(); return new Promise(res=>{ c
 async function idbDel(k){ try{ const db=await idb(); return new Promise(res=>{ const t=db.transaction('kv','readwrite'); t.objectStore('kv').delete(k); t.oncomplete=()=>res(); }); }catch(e){} }
 
 function fullBackupObject(){
-  const all={_type:'bagrut-backup',_ver:2,_at:new Date().toISOString(),school:schoolName,lock:lockHash,rec:recCode,rec:recCode,lock:lockHash,profiles:profiles,current:currentProfileId,data:{}};
+  // הנעילה אינה הגנה מול מי שמחזיק את הקובץ — הקובץ ממילא מכיל את כל הנתונים.
+  // לכן קוד השחזור נכלל בו, בדיוק כפי שמסך הנעילה מבטיח וכפי שנתיב הייבוא מצפה.
+  const all={_type:'bagrut-backup',_ver:2,_at:new Date().toISOString(),school:schoolName,
+             lock:lockHash||'', rec:recCode||'', profiles:profiles, current:currentProfileId, data:{}};
   profiles.forEach(pr=>{
     const key=pr.id==='main'?'bagrutSimPro':'bagrutSimPro:'+pr.id;
     try{ const raw=LS.getItem(key); if(raw) all.data[pr.id]=JSON.parse(raw); }catch(e){}
@@ -1910,13 +1911,26 @@ function deleteProfile(){
   state=loadState(); renderProfileBar(); renderLogo(); render();
 }
 let state=loadState();
+/* Object.assign הוא שטוח: אובייקט מקונן מגיבוי ישן דורס את ברירת המחדל כולה,
+   וכל מפתח שחסר בו הופך ל-undefined על המסך. לכן ממזגים גם רמה שנייה. */
+const NESTED_DEFAULTS=['thresholds'];
+function withDefaults(s){
+  const base=JSON.parse(JSON.stringify(DEFAULT_STATE));
+  const out=Object.assign(base,s||{});
+  NESTED_DEFAULTS.forEach(k=>{
+    out[k]=Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE[k])), (s&&typeof s[k]==='object'&&s[k])||{});
+  });
+  return out;
+}
 function loadState(){
-  try{const raw=LS.getItem(profileKey()); if(raw){const s=JSON.parse(raw); return Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE)),s);}}catch(e){}
+  try{const raw=LS.getItem(profileKey()); if(raw) return withDefaults(JSON.parse(raw));}catch(e){}
   return JSON.parse(JSON.stringify(DEFAULT_STATE));
 }
 let lastSaveAt=null, saveOk=null;
 function save(noQueue){
   clearCompCache();
+  // שומר על השלמות גם כשקוד אחר נגע ישירות במצב — ולא רק בנתיב הטעינה
+  try{ NESTED_DEFAULTS.forEach(k=>{ state[k]=Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE[k])), (typeof state[k]==='object'&&state[k])||{}); }); }catch(e){}
   try{
     const json=JSON.stringify(state);
     LS.setItem(profileKey(),json);
@@ -2384,6 +2398,15 @@ let undoStack=[];
 function undoKey(){ return 'bagrutUndo:'+currentProfileId; }
 function loadUndo(){ try{ undoStack=JSON.parse(LS.getItem(undoKey()))||[]; }catch(e){ undoStack=[]; } }
 function persistUndo(){ try{ LS.setItem(undoKey(),JSON.stringify(undoStack.slice(-8))); }catch(e){} }
+/* קלט מספרי בטוח: קלט שאינו מספר חוקי אינו "אפס" ואינו NaN — הוא "ריק".
+   +'abc' הוא NaN, ו-Math.max(0,Math.min(100,NaN)) הוא NaN — שנשמר בקובץ כ-null. */
+function numOr(val,lo,hi,dflt){
+  if(val===''||val===null||val===undefined) return dflt;
+  const n=(typeof val==='string')?Number(val.trim().replace(/[\u200e\u200f]/g,'')):Number(val);
+  if(!Number.isFinite(n)) return dflt;
+  return Math.max(lo,Math.min(hi,n));
+}
+function gradeOr(val){ return numOr(val,0,100,undefined); }
 function pushUndo(label){
   try{ undoStack.push({label,at:Date.now(),snap:JSON.stringify(state)}); if(undoStack.length>8) undoStack.shift(); persistUndo(); }catch(e){}
   renderUndo();
@@ -2470,7 +2493,8 @@ function exportLog(){
   const rows=lg.map(x=>({'תאריך':new Date(x.t).toLocaleString('he-IL'),'סוג':x.ty,'תלמידה':x.s,'פרטים':x.d,'מ':x.f,'ל':x.o}));
   const wb=XLSX.utils.book_new();
   addSheet(wb,XLSX.utils.json_to_sheet(rows),'יומן שינויים');
-  saveXlsx(wb,`יומן-שינויים-${new Date().toISOString().slice(0,10)}.xlsx`);
+  saveXlsx(wb,`יומן-שינויים-${new Date().toISOString().slice(0,10)}.xlsx`)
+    .catch(e=>toast('הייצוא נכשל: '+(e&&e.message||'שגיאה')));
 }
 function doUndo(){
   const u=undoStack.pop();
@@ -2566,8 +2590,8 @@ function tdAdd(name){
 function setTest(id,sid,val){
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.tests=st.tests||{};
-  if(val===''||val===null) delete st.tests[sid];
-  else st.tests[sid]=Math.max(0,Math.min(100,+val));
+  const tv=gradeOr(val);
+  if(tv===undefined) delete st.tests[sid]; else st.tests[sid]=tv;
   save(); renderKeepScroll();
 }
 
@@ -3639,7 +3663,7 @@ function studentSubjEditor(st,subj){
         return `<div class="comp-box" ${wOv?'style="border-color:var(--brand2);"':c.b?'style="background:#f0fdf4; border-color:#86efac;"':''}>
         <button class="compHide" onclick="hideComp('${st.id}','${key}',${c.w||0},'${esc(c.n).replace(/'/g,"")}')" title="הסרת הרכיב">✕</button><div class="cn">${esc(c.n)}${c.b&&!c.w?' <span class="pill" style="background:#dcfce7; color:#166534;">לשיפור ציון — הזיני משקל להפעלה</span>':''}</div>
         <div class="comp-row"><span class="lbl">ציון</span><input type="number" min="0" max="100" data-k="${key}" class="${gstatCls(st,key).trim()}${simCls(key)}" value="${gv[key]??''}" onchange="${isSim?`setGradeSim('${st.id}','${key}',this.value)`:`setGrade('${st.id}','${key}',this.value)`}">${isSim?'':stBtn(key)}
-        ${(()=>{const dv=(r.details||[])[i]; const v=dv&&dv.val!==null&&dv.val!==undefined?dv.val:null;
+        ${(()=>{const det=(r.details||[])[i]; const v=det&&det.val!==null&&det.val!==undefined?det.val:null;
           return (v!==null&&c.w)?`<span class="pill" title="תרומה לציון הסופי">= ${Math.round(v*c.w/100*10)/10} נק׳ מתוך ${c.w}</span>`:'';})()}</div>
         ${isSim?'':`<div class="comp-row"><span class="lbl">משקל</span>${wIn}</div>`}
         ${isSim?(noteOf(st,key)?`<div class="comp-row">${noteChip(st.id,key,1)}</div>`:''):codeOptions(key).length?`<div class="comp-row"><span class="lbl">סמל</span>${codeSelect(st,key)} ${noteBtn(st,key,subj.name+' · '+c.n)}</div>`:`<div class="comp-row">${noteBtn(st,key,subj.name+' · '+c.n)}</div>`}</div>`;
@@ -3650,8 +3674,8 @@ function studentSubjEditor(st,subj){
         <option value="">מגן ${baseComps[i].s}/${100-baseComps[i].s} (רגיל)</option>
         ${[70,60,50,40,30,20,0].map(s=>`<option value="${s}" ${sOv&&+po.s===s?'selected':''}>מגן ${s}% / בחינה ${100-s}%</option>`).join('')}</select>`;
       const eff=c.s;  // אחוז המגן בפועל
-      const dv=(r.details||[])[i];
-      const cVal=dv&&dv.val!==null&&dv.val!==undefined?dv.val:null;
+      const det=(r.details||[])[i];
+      const cVal=det&&det.val!==null&&det.val!==undefined?det.val:null;
       const contrib=cVal!==null&&c.w?Math.round(cVal*c.w/100*10)/10:null;
       const rowFinal=`<div class="comp-row" style="background:#f8faff; border-top:2px solid var(--line); font-weight:800;">
         <span class="lbl">ציון הרכיב</span>
@@ -3739,8 +3763,9 @@ function isHidden(st,key){ return !!((st.hid||{})[key]); }
 function setOv(id,key,field,val){
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.ov=st.ov||{};
-  if(val===''||val===null){ if(st.ov[key]){ delete st.ov[key][field]; if(!Object.keys(st.ov[key]).length) delete st.ov[key]; } }
-  else{ st.ov[key]=st.ov[key]||{}; st.ov[key][field]=+val; }
+  const ovv=numOr(val,0,100,undefined);
+  if(ovv===undefined){ if(st.ov[key]){ delete st.ov[key][field]; if(!Object.keys(st.ov[key]).length) delete st.ov[key]; } }
+  else{ st.ov[key]=st.ov[key]||{}; st.ov[key][field]=ovv; }
   save(); refreshOpenViews(id);
 }
 function resetOv(id,sid){
@@ -3758,8 +3783,8 @@ function setGrade(id,key,val){
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.grades=st.grades||{};
   const prev=st.grades[key];
-  if(val===''||val===null) delete st.grades[key];
-  else st.grades[key]=Math.max(0,Math.min(100,+val));
+  const gv=gradeOr(val);
+  if(gv===undefined) delete st.grades[key]; else st.grades[key]=gv;
   if(prev!==st.grades[key]) logChange('grade',st,keyLabel(st,key),prev===undefined?'—':prev,st.grades[key]===undefined?'—':st.grades[key]);
   save();
   const modal=document.getElementById('studentModal');
@@ -3769,8 +3794,10 @@ function setGrade(id,key,val){
 function setUnits(id,sid,val){
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.units=st.units||{}; const pv=st.units[sid];
-  st.units[sid]=+val;
-  logChange('units',st,(SUBJ_MAP[sid]||{}).name||sid,pv===undefined?'—':pv,+val);
+  const uv=numOr(val,0,10,undefined);
+  if(uv===undefined) return;                                  // בחירה לא חוקית — לא נוגעים בנתון
+  st.units[sid]=uv;
+  logChange('units',st,(SUBJ_MAP[sid]||{}).name||sid,pv===undefined?'—':pv,uv);
   save();
   const modal=document.getElementById('studentModal');
   if(modal&&modal.classList.contains('show')) refreshOpenViews(id,true);
@@ -4189,7 +4216,7 @@ function entryGrid(subj,studs){
         const eSplit=(r.flips||[]).some(f=>f.comp===c.n)?(100-eff):eff;   // אם היה היפוך — מציגים את החלוקה שבפועל
         const rM=eff>0?`<div class="gcell"><small>מגן ${eSplit}%</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}.m" class="${kc(key+'.m')}" ${ct(key+'.m')} value="${g[key+'.m']??''}" onchange="setGrade('${st.id}','${key}.m',this.value)">${dot(key+'.m')}</div>`:'';
         const rE=eff<100?`<div class="gcell"><small>בחינה ${100-eSplit}%</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}.e" class="${kc(key+'.e')}" ${ct(key+'.e')} value="${g[key+'.e']??''}" onchange="setGrade('${st.id}','${key}.e',this.value)">${dot(key+'.e')}</div>`:'';
-        const dv=(r.details||[])[i], cv=(dv&&dv.val!==null&&dv.val!==undefined)?Math.round(dv.val):null;
+        const det=(r.details||[])[i], cv=(det&&det.val!==null&&det.val!==undefined)?Math.round(det.val):null;
         const flip=(r.flips||[]).some(f=>f.comp===c.n);
         const avgRow=(rM&&rE)?`<div class="eAvg${cv===null?' pend':''}" title="${flip?'היפוך אחוזים לטובת הבחינה':'משוקלל לפי החלוקה שהוגדרה'}">${cv===null?'<span class="lbl">ממתין לשני הציונים</span>':`${flip?'🔀 ':''}<span class="lbl">משוקלל </span><b>${cv}</b>`}</div>`:'';
         tds+=`<td class="${nt?'hasNote':''}" ${nt?`onclick="if(event.target===this)infoDlg('הערה',${JSON.stringify(nt)})"`:''}><div class="eWrap">${codeTag}<div class="eBox">${rM}${rE}</div>${avgRow}</div></td>`;
@@ -5398,7 +5425,16 @@ function renderSettings(m){
   </div>`;
 }
 
-function T_set(k,v){ state.thresholds[k]=+v; save(); renderKeepScroll(); toast('נשמר'); }
+function T_set(k,v){
+  const lim={pass:[0,100],excel:[0,100],potential:[0,100],gap:[0,100]}[k]||[0,100];
+  const n=numOr(v,lim[0],lim[1],undefined);
+  if(n===undefined){ toast('יש להזין מספר בין '+lim[0]+' ל-'+lim[1]); renderKeepScroll(); return; }
+  const t=Object.assign({},state.thresholds,{[k]:n});
+  if(t.potential>t.excel){                                  // "פוטנציאל" מעל "הצטיינות" הוא מצב חסר משמעות
+    toast('סף הפוטנציאל אינו יכול להיות גבוה מסף ההצטיינות'); renderKeepScroll(); return;
+  }
+  state.thresholds=t; save(); renderKeepScroll(); toast('נשמר');
+}
 let bulkSubj='lashon';
 function bulkTargets(){
   const cls=(document.getElementById('bkCls')||{}).value||'';
@@ -5519,8 +5555,10 @@ function settingsSubj(subj){
 }
 function setCustom(sid,u,i,field,val){
   const key=sid+'.'+u+'.'+i;
+  const cv=numOr(val,0,100,undefined);
+  if(cv===undefined){ toast('יש להזין מספר בין 0 ל-100'); return; }
   state.custom[key]=state.custom[key]||{};
-  state.custom[key][field]=+val;
+  state.custom[key][field]=cv;
   save(); toast('נשמר — החישובים עודכנו'); renderKeepScroll();
 }
 
@@ -5618,7 +5656,8 @@ function exportExcel(cls){
       'ממוצע':avgOf(rs.map(r=>r.avg).filter(v=>v!==null))??''};
   });
   addSheet(wb,XLSX.utils.json_to_sheet(anRows),'ניתוח כיתתי');
-  saveXlsx(wb,`דוח-בגרות-${cls||'שכבה'}-${new Date().toISOString().slice(0,10)}.xlsx`);
+  saveXlsx(wb,`דוח-בגרות-${cls||'שכבה'}-${new Date().toISOString().slice(0,10)}.xlsx`)
+    .catch(e=>toast('הייצוא נכשל: '+(e&&e.message||'שגיאה')));
   toast('הקובץ ירד למחשב');
 }
 /* ייבוא חכם של קובץ הסימולטור המקורי (אקסל) — מזהה את המבנה וממלא את כל הציונים */
@@ -5764,12 +5803,7 @@ function importExcel(input){
 }
 function exportJSON(){
   // גיבוי מלא: כל הסימולטורים יחד — כדי שאפשר יהיה לשחזר הכול במכשיר אחר
-  const all={_type:'bagrut-backup',_ver:2,_at:new Date().toISOString(),school:schoolName,profiles:profiles,current:currentProfileId,data:{}};
-  profiles.forEach(pr=>{
-    const key=pr.id==='main'?'bagrutSimPro':'bagrutSimPro:'+pr.id;
-    try{ const raw=LS.getItem(key); if(raw) all.data[pr.id]=JSON.parse(raw); }catch(e){}
-  });
-  all.data[currentProfileId]=state;   // המצב הפעיל, מעודכן לרגע זה
+  const all=fullBackupObject();      // מקור אמת אחד — כדי ששני נתיבי הגיבוי לא ייפרדו
   const blob=new Blob([JSON.stringify(all)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -5827,7 +5861,7 @@ function importJSON(input){
         const n=((d&&d.students)||[]).length;
         if(!confirm(`שחזור גיבוי לסימולטור הנוכחי\n\nתלמידות בקובץ: ${n}\n\n⚠️ הנתונים בסימולטור הנוכחי יוחלפו. להמשיך?`)){ input.value=''; return; }
         pushUndo('שחזור מגיבוי');
-        state=Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE)),d);
+        state=withDefaults(d);                    // ולא Object.assign שטוח: ספים חסרים היו הופכים ל-undefined
         save(); render(); toast(`שוחזרו ${n} תלמידות`);
       }
     }
@@ -6096,7 +6130,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='9.8';
+const APP_VERSION='10.6';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -6361,7 +6395,7 @@ async function driveWrite(pid,pl){
 /* ---- סנכרון ---- */
 /* נקודת המקור למיזוג: העותק שעליו שני המכשירים הסכימו בפעם האחרונה.
    בלעדיו אי אפשר להבדיל בין "אני שיניתי" לבין "שניים שינו" — וכל הבדל היה נהפך לשאלה. */
-const MRG_FLD=['grades','gstat','codes','notes','ov','units','mugbarNames','shw','hid'];
+const MRG_FLD=['grades','gstat','codes','notes','ov','units','mugbarNames','shw','hid','tests'];
 function baseOf(stt){
   if(!stt) return null;
   return {classes:(stt.classes||[]).slice(), students:(stt.students||[]).map(s=>{
@@ -6407,7 +6441,7 @@ async function driveSave(pid,force){
     const remote=dv.files[pid];
     if(remote&&remote.ver>localVer(pid)){                                       // מישהו אחר הקדים
       dv.busy=false; dv.state='conflict'; renderSyncInd();
-      driveConflict(pid); return;
+      await driveConflict(pid); return;      // חובה להמתין: הקורא מסיק מכאן שהשמירה הסתיימה
     }
     await driveWrite(pid,pl);
     setLocalVer(pid,nextVer); dv.sig[pid]=sig; clearDirty(pid); saveBase(pid,stt);
@@ -6478,6 +6512,7 @@ function driveLanding(){
   }
 }
 function driveApplyRemote(pid,pl,rv){
+  if(pl&&pl.state) pl.state=withDefaults(pl.state);        // גם קובץ מגרסה ישנה בדרייב
   driveRegisterProfile(pid,pl);                             // חובה לפני הכתיבה: בלי רשומת פרופיל הנתונים בלתי נגישים
   const cur=(pid===currentProfileId)?state:loadProfileState(pid);
   const merged=applyPayload(cur,pl);
@@ -6505,7 +6540,7 @@ function mergeStates(mine,theirs,base){
   Object.keys(M).forEach(id=>{
     const m=M[id], t=O[id], b=B[id]||{};
     if(!t) return;
-    ['grades','gstat','codes','notes','ov','units','mugbarNames','shw','hid'].forEach(fld=>{
+    MRG_FLD.forEach(fld=>{                       // מקור אמת אחד לרשימת השדות — לא רשימה שנייה שתיפרד
       const mm=m[fld]||{}, tt=t[fld]||{}, bb=b[fld]||{};
       t[fld]=t[fld]||{};
       Object.keys(mm).forEach(k=>{
@@ -7057,7 +7092,12 @@ if(driveEnabled()){
     if(Date.now()-dv.lastSync<45000) return;
     driveSyncAll();
   });
-  window.addEventListener('beforeunload',()=>{ if(Object.keys(dv.queue).length) driveSave(currentProfileId,true); });
+  // באייפון beforeunload כמעט לא נורה. pagehide והמעבר ל-hidden הם האירועים
+  // שבאמת קורים כשעוברים אפליקציה — שם צריך לרוקן את התור.
+  function dvFlush(){ if(Object.keys(dv.queue).length&&dv.on&&navigator.onLine) driveSave(currentProfileId,true); }
+  window.addEventListener('beforeunload',dvFlush);
+  window.addEventListener('pagehide',dvFlush);
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') dvFlush(); });
 }
 // סרגל ההזנה מתכווץ בגלילה כדי לפנות גובה לטבלה
 (function(){ let last=false;
