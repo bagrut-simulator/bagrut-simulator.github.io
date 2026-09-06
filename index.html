@@ -2128,12 +2128,25 @@ function togglePro(){
   state.pro=!state.pro; save(); render();
   toast(state.pro?'מצב מקצועי — כל היכולות פתוחות':'מצב פשוט — מוצגות רק היכולות הבסיסיות');
 }
-/* ============ אשף פתיחה ============ */
+/* ============ אשף פתיחה ============
+   שני באגים שהיו כאן:
+   1. הסימון נשמר ב-state, שהוא לכל סימולטור בנפרד — ולכן כל סימולטור חדש
+      פתח את האשף מחדש, וגם סנכרון מדרייב החזיר אותו.
+   2. "דלג" לא סימן כלום, ולכן האשף חזר בפתיחה הבאה.
+   הסימון עבר לרמת המכשיר, וכל סגירה — כולל דילוג — סופרת. */
 let wizStep=1;
+function wizSeen(){
+  try{ if(LS.getItem('bagrutWizDone')==='1') return true; }catch(e){}
+  return !!(state&&state.wizDone);        // מכבד גם סימון ישן מגרסאות קודמות
+}
+function wizMarkSeen(){
+  try{ LS.setItem('bagrutWizDone','1'); }catch(e){}
+  if(state&&!state.wizDone){ state.wizDone=true; save(); }
+}
 function openWizard(){ wizStep=1; document.getElementById('wzModal').classList.add('show'); renderWizard(); }
-function closeWizard(skip){
+function closeWizard(){
   document.getElementById('wzModal').classList.remove('show');
-  if(!skip){ state.wizDone=true; save(); }
+  wizMarkSeen();                          // גם דילוג, גם סיום, גם קיצור דרך
   render();
 }
 function renderWizard(){
@@ -6260,7 +6273,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='11.4';
+const APP_VERSION='11.6';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -6889,7 +6902,9 @@ function drivePanelHtml(){
      :`<button class="btn ok sm" onclick="driveConnect()">${ic('folder',13)}חיבור לגוגל דרייב</button>`}
   </div>
   <div class="gRow"><label>שם המכשיר</label><input type="text" value="${esc(driveName())}" onchange="setDriveName(this.value)"></div>
-  <div class="note">סנכרון אחרון: ${esc(lastTxt)}${qn?` · <b>${qn} ממתינים</b>`:''}${dv.lastErr?` · <span class="g-red">${esc(dv.lastErr)}</span>`:''}<br>
+  <div class="note">${dv.on
+      ? `סנכרון אחרון: ${esc(lastTxt)}${qn?` · <b>${qn} ממתינים</b>`:''}${dv.lastErr?` · <span class="g-red">${esc(dv.lastErr)}</span>`:''}`
+      : `טרם התחברת. הנתונים שמורים במכשיר הזה, והחיבור יעלה אותם לדרייב הפרטי שלך.`}<br>
     הנתונים נשמרים בתיקייה <b>נסתרת של האפליקציה</b> בדרייב שלך. לתוכנה אין גישה לשום קובץ אחר, ולספק אין גישה כלל.
     שכבת הסימולציה, הלוגו ונקודות השמירה נשארים מקומיים ואינם מסתנכרנים.</div>`;
 }
@@ -7222,7 +7237,7 @@ render();
 renderNag();
 loadUndo(); renderUndo();
 autoSnapshot();
-if(!state.wizDone&&!isLocked()&&STORAGE_OK) setTimeout(openWizard,600);
+if(!wizSeen()&&!isLocked()&&STORAGE_OK) setTimeout(openWizard,600);
 fileInit();
 updAutoInit();
 licRefresh(); trialSyncIdb();
