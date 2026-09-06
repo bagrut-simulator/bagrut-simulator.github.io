@@ -24,6 +24,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 :root{
   --bg:#eef1f9; --card:#fff; --ink:#16233a; --muted:#64748b;
@@ -1358,6 +1359,7 @@ function showTruncated(){
   <div id="profileSlot"></div>
   <div style="margin-inline-start:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
     <span id="syncInd" class="syncInd" style="display:none;"></span>
+    <div id="cellUndoBar"></div>
     <div id="undoBar"></div>
     <div id="fileBar" style="display:flex; gap:6px; align-items:center;"></div>
     <div id="saveInd" onclick="setTab('settings')" title="פרטי שמירה וגיבוי"></div>
@@ -1367,6 +1369,7 @@ function showTruncated(){
 <div id="updBar" style="display:none;"></div>
 <div id="licBar" class="licBar" style="display:none;"></div>
 <div id="nagBar" style="display:none; background:linear-gradient(90deg,#fef2f2,#fee2e2); border-bottom:2px solid #dc2626; padding:9px 18px; font-size:13.5px; align-items:center; gap:12px; flex-wrap:wrap;"></div>
+<style>#nagBar.nagSoft{background:linear-gradient(90deg,#fffbeb,#fef3c7) !important; border-bottom-color:#f59e0b !important;}</style>
 <nav class="tabs" id="tabs"></nav>
 <main id="main"></main>
 <div id="studentModal" onclick="if(event.target===this)closeStudent()"><div class="box" id="studentBox"></div></div>
@@ -1681,10 +1684,13 @@ function setGradeSim(id,key,val){
   const st=state.students.find(s=>s.id===id); if(!st) return;
   calcOn=false;   // ההקלדה מבטלת את המחשבון הכבד — מפעילים אותו מחדש בלחיצה
   st.simg=st.simg||{};
+  const undoFn=cellSnap(id,'simg',key);
+  const before=JSON.stringify((st.simg||{})[key]);
   const v=gradeOr(val);
   if(v===undefined){ delete st.simg[key]; }
   else if((st.grades||{})[key]===v){ delete st.simg[key]; }   // חזרה לערך האמיתי = ביטול השינוי
   else st.simg[key]=v;
+  if(before!==JSON.stringify((st.simg||{})[key])) pushCell('ניסוי · '+keyLabel(st,key)+' · '+st.name,undoFn);
   save();
   const modal=document.getElementById('studentModal');
   if(modal&&modal.classList.contains('show')) refreshOpenViews(id);
@@ -1905,7 +1911,7 @@ function renderProfileBar(){
 function switchProfile(id){
   if(!profiles.some(p=>p.id===id)) return;
   currentProfileId=id; saveProfiles();
-  state=loadState(); loadUndo(); renderProfileBar(); renderLogo(); render();
+  state=loadState(); loadUndo(); clearCellUndo(); renderProfileBar(); renderLogo(); render();
   toast('עברת לסימולטור: '+profiles.find(p=>p.id===id).name);
 }
 function setProfileName(v){
@@ -1996,23 +2002,40 @@ function renderLic(){
   }
   el.innerHTML=s+licBanner();
 }
+/* "אחר כך" רק הסתיר את האלמנט — וכל render() החזיר אותו תוך שניות.
+   עכשיו הדחייה נשמרת, והתדירות מתחשבת בכך שיש עותק בדרייב. */
+function nagSnoozed(){
+  try{ return LS.getItem('bagrutNagSnooze')===new Date().toDateString(); }catch(e){ return false; }
+}
+function nagSnooze(){
+  try{ LS.setItem('bagrutNagSnooze',new Date().toDateString()); }catch(e){}
+  const el=document.getElementById('nagBar'); if(el) el.style.display='none';
+}
 function renderNag(){
   const el=document.getElementById('nagBar'); if(!el) return;
   const n=countAllStudents();
   if(!n){ el.style.display='none'; return; }
   if(fileState==='on'){ el.style.display='none'; return; }   // מחובר לקובץ — נשמר אוטומטית
+  if(nagSnoozed()){ el.style.display='none'; return; }       // נדחה להיום
   const b=lastBackupInfo();
   const today=new Date().toDateString();
   const backedUpToday=b&&new Date(b.at).toDateString()===today;
   const diff=b?n-(b.n||0):n;
   if(backedUpToday&&diff===0){ el.style.display='none'; return; }
-  const txt=!b?'<b>⚠️ עדיין לא נעשה גיבוי!</b> הנתונים קיימים רק בדפדפן הזה.'
+  // מחוברים לדרייב: יש עותק בענן, ולכן מזכירים פעם בשבוע ובנימה רכה
+  const synced=(typeof dv!=='undefined')&&dv.on&&dv.state==='synced';
+  const days=b?Math.floor((Date.now()-new Date(b.at).getTime())/86400000):999;
+  if(synced&&days<7){ el.style.display='none'; return; }
+  el.className=synced?'nagSoft':'';
+  const txt = synced
+    ? `<b>🔔 כדאי גיבוי לקובץ</b> — הנתונים מסונכרנים בדרייב, אבל קובץ אצלך הוא ההעתק היחיד שלא תלוי בחשבון הגוגל.${b?` הגיבוי האחרון: ${new Date(b.at).toLocaleDateString('he-IL')}.`:''}`
+    : (!b?'<b>⚠️ עדיין לא נעשה גיבוי!</b> הנתונים קיימים רק בדפדפן הזה.'
     :(!backedUpToday?`<b>🔔 תזכורת יומית:</b> הגיבוי האחרון היה ב-${new Date(b.at).toLocaleDateString('he-IL')} (${b.n} תלמידות).`
-                    :`<b>🔔 נוספו/שונו נתונים מאז הגיבוי</b> (${Math.abs(diff)} תלמידות).`);
-  el.innerHTML=`${txt} <span>מומלץ לגבות בסוף היום.</span>
+                    :`<b>🔔 נוספו/שונו נתונים מאז הגיבוי</b> (${Math.abs(diff)} תלמידות).`));
+  el.innerHTML=`${txt}
     <span style="margin-inline-start:auto; display:flex; gap:6px;">
       <button class="btn ok sm" onclick="exportJSON()">💾 גיבוי עכשיו</button>
-      <button class="btn sec sm" onclick="document.getElementById('nagBar').style.display='none'">אחר כך</button>
+      <button class="btn sec sm" onclick="nagSnooze()">לא היום</button>
     </span>`;
   el.style.display='flex';
 }
@@ -2515,6 +2538,44 @@ function numOr(val,lo,hi,dflt){
   return Math.max(lo,Math.min(hi,n));
 }
 function gradeOr(val){ return numOr(val,0,100,undefined); }
+/* ═══ ביטול עריכות תא ═══
+   מחסנית נפרדת לחלוטין מ-pushUndo המבני. הסיבה: תצלום מצב מלא על כל הקלדת
+   ציון היה מנפח את האחסון, ו-Ctrl+Z לא-מכוון היה מחזיר שעת עבודה אחורה.
+   כאן כל פריט מבטל תא אחד, והחיפוש לפי מזהה — כדי שמיזוג מהדרייב
+   שהחליף את אובייקט התלמידה לא ישבור את הביטול. */
+let cellUndo=[];
+const CELL_UNDO_MAX=40;
+function stById(id){ return (state.students||[]).find(s=>s.id===id); }
+function pushCell(label,undoFn){
+  cellUndo.push({label,at:Date.now(),fn:undoFn});
+  if(cellUndo.length>CELL_UNDO_MAX) cellUndo.shift();
+  renderCellUndo();
+}
+/* עוזר גנרי: משחזר מפתח בודד בתוך שדה של תלמידה */
+function cellSnap(id,field,key,label){
+  const st=stById(id); if(!st) return;
+  const had=(st[field]||{}).hasOwnProperty(key);
+  const prev=(st[field]||{})[key];
+  return ()=>{ const s=stById(id); if(!s) return;
+    s[field]=s[field]||{};
+    if(had) s[field][key]=prev; else delete s[field][key]; };
+}
+function doCellUndo(){
+  const u=cellUndo.pop();
+  if(!u){ toast('אין עריכת ציון לביטול'); renderCellUndo(); return; }
+  try{ u.fn(); }catch(e){ toast('הביטול נכשל'); renderCellUndo(); return; }
+  save(); renderCellUndo(); render();
+  toast('↩︎ בוטל: '+u.label);
+}
+function clearCellUndo(){ cellUndo=[]; renderCellUndo(); }
+function renderCellUndo(){
+  const el=document.getElementById('cellUndoBar'); if(!el) return;
+  if(!cellUndo.length){ el.innerHTML=''; return; }
+  const u=cellUndo[cellUndo.length-1];
+  el.innerHTML=`<button class="btn sec sm" onclick="doCellUndo()" title="Ctrl+Z"
+    style="padding:4px 10px; font-size:11.5px; border-color:#bfd3ff; background:#eff4ff; color:#1d4ed8;">
+    ↩︎ בטל ציון: ${esc(u.label)}${cellUndo.length>1?` <span class="pill" style="padding:0 6px;">${cellUndo.length}</span>`:''}</button>`;
+}
 function pushUndo(label){
   try{ undoStack.push({label,at:Date.now(),snap:JSON.stringify(state)}); if(undoStack.length>8) undoStack.shift(); persistUndo(); }catch(e){}
   renderUndo();
@@ -2611,6 +2672,7 @@ function doUndo(){
   try{ state=Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE)),JSON.parse(u.snap)); }catch(e){ toast('שגיאה בביטול'); return; }
   persistUndo(); save(); render(); toast('✅ בוטל: '+u.label);
 }
+function renderUndoAll(){ renderUndo(); renderCellUndo(); }
 function renderUndo(){
   const el=document.getElementById('undoBar'); if(!el) return;
   if(!undoStack.length){ el.innerHTML=''; return; }
@@ -2619,9 +2681,12 @@ function renderUndo(){
     ↩️ בטל: ${esc(u.label)}${undoStack.length>1?` <span class="pill" style="padding:0 6px;">${undoStack.length}</span>`:''}</button>`;
 }
 document.addEventListener('keydown',e=>{
-  if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')&&!/^(INPUT|TEXTAREA|SELECT)$/.test((e.target||{}).tagName||'')){
-    e.preventDefault(); doUndo();
-  }
+  if(!((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z'))) return;
+  // בתוך שדה קלט — הביטול של הדפדפן על הטקסט עצמו, לא שלנו
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test((e.target||{}).tagName||'')) return;
+  e.preventDefault();
+  if(cellUndo.length) doCellUndo();      // עריכת תא קודמת לפעולה מבנית
+  else doUndo();
 });
 
 /* ============ מבחני כיתה (לחיזוי בלבד — לא חלק מהציון הרשמי) ============ */
@@ -2698,7 +2763,9 @@ function tdAdd(name){
 function setTest(id,sid,val){
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.tests=st.tests||{};
+  const undoFn=cellSnap(id,'tests',sid);
   const tv=gradeOr(val);
+  if(String(st.tests[sid])!==String(tv)) pushCell('מבחן · '+((SUBJ_MAP[sid]||{}).name||sid)+' · '+st.name,undoFn);
   if(tv===undefined) delete st.tests[sid]; else st.tests[sid]=tv;
   save(); renderKeepScroll();
 }
@@ -3323,7 +3390,7 @@ function render(){
     try{ m.innerHTML=tabErrHtml(currentTab,err); }catch(e2){ m.innerHTML='<div class="card">שגיאה בהצגת המסך.</div>'; }
     try{ console.error('render('+currentTab+')',err); }catch(e3){}
   }
-  try{ renderSaveInd(); renderNag(); renderHeaderCenter(); renderUndo(); renderLic(); renderSyncInd(); animateCounters(); }catch(e){}
+  try{ renderSaveInd(); renderNag(); renderHeaderCenter(); renderUndoAll(); renderLic(); renderSyncInd(); animateCounters(); }catch(e){}
 }
 function classFilterHtml(id,val){
   return `<select id="${id}" onchange="renderKeepScroll()"><option value="">כל השכבה</option>${state.classes.map(c=>`<option ${val===c?'selected':''}>${c}</option>`).join('')}</select>`;
@@ -3895,9 +3962,10 @@ function setGrade(id,key,val){
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.grades=st.grades||{};
   const prev=st.grades[key];
+  const undoFn=cellSnap(id,'grades',key);
   const gv=gradeOr(val);
   if(gv===undefined) delete st.grades[key]; else st.grades[key]=gv;
-  if(prev!==st.grades[key]) logChange('grade',st,keyLabel(st,key),prev===undefined?'—':prev,st.grades[key]===undefined?'—':st.grades[key]);
+  if(prev!==st.grades[key]){ pushCell(keyLabel(st,key)+' · '+st.name,undoFn); logChange('grade',st,keyLabel(st,key),prev===undefined?'—':prev,st.grades[key]===undefined?'—':st.grades[key]); }
   save();
   const modal=document.getElementById('studentModal');
   if(modal&&modal.classList.contains('show')) refreshOpenViews(id);
@@ -3908,6 +3976,8 @@ function setUnits(id,sid,val){
   st.units=st.units||{}; const pv=st.units[sid];
   const uv=numOr(val,0,10,undefined);
   if(uv===undefined) return;                                  // בחירה לא חוקית — לא נוגעים בנתון
+  const undoFn=cellSnap(id,'units',sid);
+  if(pv!==uv) pushCell('יח"ל · '+((SUBJ_MAP[sid]||{}).name||sid)+' · '+st.name,undoFn);
   st.units[sid]=uv;
   logChange('units',st,(SUBJ_MAP[sid]||{}).name||sid,pv===undefined?'—':pv,uv);
   save();
@@ -5685,6 +5755,98 @@ function setCustom(sid,u,i,field,val){
    גם כשמגדירים ws['!views']=[{RTL:true}] — בדקנו את ה-XML שנוצר.
    לכן אחרי הכתיבה פותחים את ה-ZIP ומוסיפים rightToLeft="1" לכל גיליון.
    כך אקסל, Google Sheets ו-LibreOffice פותחים את הקובץ עם עמודה A בימין. */
+/* ═══ ייצוא מעוצב ═══
+   SheetJS בגרסה החופשית אינו כותב עיצוב תאים כלל — לא מילוי, לא גבולות, לא רוחב.
+   ExcelJS כן. הוא הספרייה שמייצרת את הגיליונות; SheetJS נשאר כגיבוי אם היא לא נטענה. */
+const XL={
+  head:'FFDDE3F7', headTxt:'FF1E1B4B',      // כותרות: אינדיגו בהיר
+  total:'FFFCE7F3', totalTxt:'FF831843',    // שורת סיכום: ורוד
+  line:'FFCBD5E1',                           // גבולות
+  red:'FFDC2626', blue:'FF1D4ED8', ink:'FF1E293B', muted:'FF64748B',
+  ok:'FF065F46', okBg:'FFECFDF5', warnBg:'FFFFFBEB', badBg:'FFFFF1F2'
+};
+function xlBorder(c){ const t={style:'thin',color:{argb:XL.line}}; c.border={top:t,left:t,bottom:t,right:t}; }
+function xlAutoWidth(hdr,rows,key,min,max){
+  let w=String(hdr).length+2;
+  rows.forEach(r=>{ const v=r[key]; if(v!==undefined&&v!==null) w=Math.max(w,String(v).length+2); });
+  return Math.min(max||34,Math.max(min||8,w));
+}
+/* spec: {name,title,cols:[{h,k,w,align,num}],rows:[{}],totals:{},cellStyle(row,col,val)} */
+async function writeStyledXlsx(specs,fname){
+  const wb=new ExcelJS.Workbook();
+  wb.creator='סימולטור בגרות'; wb.created=new Date();
+  specs.forEach(sp=>{
+    const cols=sp.cols.filter(Boolean);
+    const ws=wb.addWorksheet(sp.name.slice(0,31),{
+      views:[{rightToLeft:true,state:'frozen',xSplit:1,ySplit:sp.title?2:1}],
+      pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}
+    });
+    let rowIdx=0;
+    if(sp.title){
+      rowIdx++;
+      ws.mergeCells(1,1,1,cols.length);
+      const t=ws.getCell(1,1);
+      t.value=sp.title;
+      t.font={bold:true,size:13,color:{argb:XL.headTxt}};
+      t.alignment={horizontal:'right',vertical:'middle'};
+      ws.getRow(1).height=24;
+    }
+    // כותרות
+    rowIdx++;
+    const hr=ws.getRow(rowIdx);
+    hr.height=32;
+    // ExcelJS ממספר עמודות מ-1. הצבה של מערך ל-row.values מדלגת על האיבר הראשון,
+    // ולכן כותבים תא-תא במפורש — אחרת שורת הכותרות יוצאת ריקה או מוזזת.
+    cols.forEach((c,i)=>{
+      const cell=hr.getCell(i+1);
+      cell.value=c.h;
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XL.head}};
+      cell.font={bold:true,size:11,color:{argb:XL.headTxt}};
+      cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+      xlBorder(cell);
+    });
+    const headRow=rowIdx;
+    // נתונים
+    (sp.rows||[]).forEach(r=>{
+      rowIdx++;
+      const row=ws.getRow(rowIdx);
+      cols.forEach((c,i)=>{
+        const cell=row.getCell(i+1);
+        const v=r[c.k];
+        cell.value=(v===undefined||v==='')?null:v;
+        cell.alignment={horizontal:c.align||(typeof v==='number'?'center':'right'),vertical:'middle',wrapText:!!c.wrap};
+        if(c.num&&typeof v==='number') cell.numFmt=c.num;
+        cell.font={size:11,color:{argb:XL.ink}};
+        xlBorder(cell);
+        if(sp.cellStyle){ const s=sp.cellStyle(r,c,v); if(s){ if(s.font) cell.font=Object.assign({size:11},s.font); if(s.fill) cell.fill=s.fill; } }
+      });
+      row.height=19;
+    });
+    // סיכום
+    if(sp.totals){
+      rowIdx++;
+      const tr=ws.getRow(rowIdx);
+      cols.forEach((c,i)=>{
+        const cell=tr.getCell(i+1);
+        const v=sp.totals[c.k];
+        cell.value=(v===undefined||v==='')?null:v;
+        cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XL.total}};
+        cell.font={bold:true,size:11,color:{argb:XL.totalTxt}};
+        cell.alignment={horizontal:c.align||(typeof v==='number'?'center':'right'),vertical:'middle'};
+        if(c.num&&typeof v==='number') cell.numFmt=c.num;
+        xlBorder(cell);
+      });
+      tr.height=21;
+    }
+    // מסנן, רוחב, קיפאון
+    if(sp.rows&&sp.rows.length) ws.autoFilter={from:{row:headRow,column:1},to:{row:headRow,column:cols.length}};
+    cols.forEach((c,i)=>{ ws.getColumn(i+1).width=c.w||xlAutoWidth(c.h,sp.rows||[],c.k,9,34); });
+  });
+  const buf=await wb.xlsx.writeBuffer();
+  dlBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),fname);
+}
+function styledAvailable(){ return typeof ExcelJS!=='undefined'&&typeof dlBlob==='function'; }
+
 function sheetRTL(ws){ ws['!views']=[{RTL:true}]; return ws; }
 function addSheet(wb,ws,name){ XLSX.utils.book_append_sheet(wb,sheetRTL(ws),name); }
 function dlBlob(blob,fname){
@@ -5724,7 +5886,7 @@ function exportExcel(cls){
   // גיליון סיכום
   const sumRows=studs.map(st=>{
     const r=calcStudent(st);
-    const row={[gx('שם')]:st.name,[gx('כיתה')]:st.cls};
+    const row={_st:st,[gx('שם')]:st.name,[gx('כיתה')]:st.cls};
     SUBJECTS.forEach(s=>{const p=r.per[s.id]; row[s.name]=p&&p.active?(p.final??'חסר'):'';});
     row['ממוצע משוקלל']=r.avg??'';
     row['סה"כ יח"ל']=r.totalUnits;
@@ -5733,7 +5895,7 @@ function exportExcel(cls){
     return row;
   });
   if(state.coord) sumRows.forEach(r=>{ r['רכזת פדגוגית']=state.coord; });
-  const ws1=XLSX.utils.json_to_sheet(sumRows);
+  const ws1=XLSX.utils.json_to_sheet(sumRows.map(r=>{ const c={...r}; delete c._st; return c; }));
   ws1['!cols']=Object.keys(sumRows[0]).map(()=>({wch:13}));
   addSheet(wb,ws1,'סיכום');
   // גיליון גולמי (לייבוא חוזר)
@@ -5773,9 +5935,80 @@ function exportExcel(cls){
       'ממוצע':avgOf(rs.map(r=>r.avg).filter(v=>v!==null))??''};
   });
   addSheet(wb,XLSX.utils.json_to_sheet(anRows),'ניתוח כיתתי');
-  saveXlsx(wb,`דוח-בגרות-${cls||'שכבה'}-${new Date().toISOString().slice(0,10)}.xlsx`)
-    .catch(e=>toast('הייצוא נכשל: '+(e&&e.message||'שגיאה')));
+  const fname=`דוח-בגרות-${cls||'שכבה'}-${new Date().toISOString().slice(0,10)}.xlsx`;
+  if(styledAvailable()){
+    exportStyled(cls,studs,sumRows,rawRows,anRows,fname)
+      .catch(e=>{ console.warn(e); saveXlsx(wb,fname).catch(()=>toast('הייצוא נכשל')); });
+  } else {
+    saveXlsx(wb,fname).catch(e=>toast('הייצוא נכשל: '+(e&&e.message||'שגיאה')));
+  }
   toast('הקובץ ירד למחשב');
+}
+
+/* בונה את שלושת הגיליונות בגרסה המעוצבת. התוכן זהה לחלוטין לגרסה הישנה —
+   רק העיצוב נוסף, כדי שהקובץ ייראה כמו טבלה שמישהו הכין ביד. */
+async function exportStyled(cls,studs,sumRows,rawRows,anRows,fname){
+  const when=new Date().toLocaleDateString('he-IL');
+  const subjCols=SUBJECTS.map(s=>({h:s.name,k:s.name,align:'center',w:11}));
+  /* השפה הסמנטית עוברת גם לאקסל: שחור = דווח · אדום = אמיתי שטרם דווח · כחול = פיקטיבי.
+     ציון מקצוע נצבע אם אחד מרכיביו מסומן כך. */
+  const subjColor=(st,sid)=>{
+    const g=st.gstat||{}; let red=false,blue=false;
+    Object.keys(g).forEach(k=>{ if(String(k).split('.')[0]!==sid) return;
+      if(g[k]==='r') red=true; if(g[k]==='b') blue=true; });
+    return blue?XL.blue:(red?XL.red:null);
+  };
+  const subjIds={}; SUBJECTS.forEach(s=>subjIds[s.name]=s.id);
+  const sumStyle=(r,c)=>{
+    if(subjIds[c.k]&&r._st&&typeof r[c.k]==='number'){
+      const col=subjColor(r._st,subjIds[c.k]);
+      if(col) return {font:{color:{argb:col},bold:true}};
+    }
+    if(c.k==='סטטוס'){
+      const v=String(r['סטטוס']||'');
+      if(/מצטיינת/.test(v)) return {font:{bold:true,color:{argb:XL.blue}}};
+      if(/זכאית/.test(v))   return {font:{bold:true,color:{argb:XL.ok}}};
+      if(/מעכב/.test(v))    return {font:{bold:true,color:{argb:XL.red}}};
+    }
+    if(c.k==='מעכבים'&&r['מעכבים']) return {font:{color:{argb:XL.red}}};
+    if(c.k==='ממוצע משוקלל'&&typeof r[c.k]==='number') return {font:{bold:true}};
+    return null;
+  };
+  const specs=[
+    { name:'סיכום',
+      title:`דוח מצב בגרות · ${cls||'כל השכבה'} · ${when}${state.coord?' · רכזת: '+state.coord:''}`,
+      cols:[{h:gx('שם'),k:gx('שם'),w:20},{h:gx('כיתה'),k:gx('כיתה'),w:10,align:'center'}]
+        .concat(subjCols)
+        .concat([{h:'ממוצע משוקלל',k:'ממוצע משוקלל',w:12,align:'center',num:'0.0'},
+                 {h:'סה"כ יח"ל',k:'סה"כ יח"ל',w:10,align:'center'},
+                 {h:'מעכבים',k:'מעכבים',w:24,wrap:true},
+                 {h:'סטטוס',k:'סטטוס',w:16,align:'center'}]),
+      rows:sumRows.map(r=>{ const c={...r}; return c; }), cellStyle:sumStyle,
+      totals:(()=>{
+        const avgs=sumRows.map(r=>r['ממוצע משוקלל']).filter(v=>typeof v==='number');
+        const t={}; t[gx('שם')]='סה"כ '+sumRows.length+' '+gx('תלמידות');
+        t['ממוצע משוקלל']=avgs.length?Math.round(avgOf(avgs)*10)/10:'';
+        t['מעכבים']=sumRows.filter(r=>r['מעכבים']).length+' עם מעכבים';
+        return t; })() },
+    { name:'נתונים גולמיים',
+      title:`נתונים מלאים לייבוא חוזר · ${cls||'כל השכבה'} · ${when}`,
+      cols:Object.keys(rawRows[0]||{'שם':1}).map(k=>({h:k,k,wrap:k.length>18})),
+      rows:rawRows },
+    { name:'ניתוח כיתתי',
+      title:`ניתוח לפי כיתה · ${when}`,
+      cols:[{h:'כיתה',k:'כיתה',w:12},{h:'תלמידות',k:'תלמידות',w:10,align:'center'},
+            {h:'זכאיות',k:'זכאיות',w:10,align:'center'},{h:'מצטיינות',k:'מצטיינות',w:11,align:'center'},
+            {h:'פוטנציאל',k:'פוטנציאל',w:11,align:'center'},{h:'עם מעכבים',k:'עם מעכבים',w:12,align:'center'},
+            {h:'ממוצע',k:'ממוצע',w:10,align:'center',num:'0.0'}],
+      rows:anRows,
+      cellStyle:(r,c)=>c.k==='עם מעכבים'&&r[c.k]>0?{font:{color:{argb:XL.red},bold:true}}:null,
+      totals:(()=>{ const s=k=>anRows.reduce((a,r)=>a+(+r[k]||0),0);
+        const av=anRows.map(r=>r['ממוצע']).filter(v=>typeof v==='number');
+        return {'כיתה':'סה"כ','תלמידות':s('תלמידות'),'זכאיות':s('זכאיות'),'מצטיינות':s('מצטיינות'),
+                'פוטנציאל':s('פוטנציאל'),'עם מעכבים':s('עם מעכבים'),
+                'ממוצע':av.length?Math.round(avgOf(av)*10)/10:''}; })() }
+  ];
+  await writeStyledXlsx(specs,fname);
 }
 /* ייבוא חכם של קובץ הסימולטור המקורי (אקסל) — מזהה את המבנה וממלא את כל הציונים */
 function parseSimulatorWorkbook(wb){
@@ -6273,7 +6506,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='11.6';
+const APP_VERSION='12.3';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -7235,7 +7468,7 @@ renderLogo();
 renderSaveInd();
 render();
 renderNag();
-loadUndo(); renderUndo();
+loadUndo(); renderUndoAll();
 autoSnapshot();
 if(!wizSeen()&&!isLocked()&&STORAGE_OK) setTimeout(openWizard,600);
 fileInit();
