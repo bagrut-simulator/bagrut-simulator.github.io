@@ -232,7 +232,8 @@ input.g-red, .g-red{color:#dc2626 !important; font-weight:800;}
 input.g-blue, .g-blue{color:#1d4ed8 !important; font-weight:800; font-style:italic;}
 input.sim-cell{background:#eff4ff !important; border-color:#1d4ed8 !important; color:#1d4ed8 !important;
   font-weight:800; font-style:italic; box-shadow:0 0 0 1px #1d4ed8;}
-#simBanner{display:none; background:linear-gradient(90deg,#fff7ed,#ffedd5); border-bottom:2px solid #f59e0b; padding:8px 18px; font-size:13px; align-items:center; gap:10px; flex-wrap:wrap; position:sticky; top:49px; z-index:49;}
+#simBanner{display:none; background:linear-gradient(90deg,var(--sim-soft),#dbe6ff); border-bottom:2px solid var(--sim); color:var(--sim);
+  padding-top:calc(8px + env(safe-area-inset-top,0px)*0); padding:8px 18px; font-size:13px; align-items:center; gap:10px; flex-wrap:wrap; position:sticky; top:49px; z-index:49;}
 body.sim-on #simBanner{display:flex;}
 body.sim-on nav.tabs{border-bottom-color:#f59e0b;}
 #simTabBtn{border:2px solid transparent;}
@@ -246,6 +247,8 @@ button.btn.sec{background:var(--soft); color:var(--ink); border:1px solid var(--
 button.btn.sec:hover{background:#e8edf9; box-shadow:0 3px 10px rgba(30,41,80,.1);}
 button.btn.ok{background:linear-gradient(135deg,#059669,#10b981); box-shadow:0 3px 10px rgba(5,150,105,.3);}
 button.btn.warn{background:linear-gradient(135deg,#d97706,#f59e0b); box-shadow:0 3px 10px rgba(217,119,6,.3);}
+button.btn.simClear{background:#fff; color:var(--sim); border:1.5px solid var(--sim-line); box-shadow:none; font-weight:800;}
+button.btn.simClear:hover:not(:disabled){background:var(--sim-soft); border-color:var(--sim);}
 button.btn.bad{background:linear-gradient(135deg,#e11d48,#f43f5e); box-shadow:0 3px 10px rgba(225,29,72,.3);}
 button.btn.sm{padding:5px 10px; font-size:12px; border-radius:8px;}
 .toolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;}
@@ -580,6 +583,35 @@ select.fSel.on{border-color:var(--brand); background:#eef2ff; color:#3730a3; box
 .fltBar .fCnt.off{color:var(--muted); background:var(--soft); border-color:var(--line);}
 @media(max-width:820px){.fltBar{gap:5px; padding:7px 9px;} select.fSel{max-width:140px; font-size:11.5px;}
   .fltBar .fCnt{margin-inline-start:0;}}
+/* במסך צר הסרגל תפס גובה של חצי מסך לפני שרואים תלמידה אחת. מקופל כברירת מחדל. */
+.fltToggle{display:none;}
+@media(max-width:560px){
+  .fltToggle{display:inline-flex; align-items:center; gap:6px; width:100%; justify-content:space-between;
+    min-height:40px; padding:0 12px; margin-bottom:8px; border-radius:12px; cursor:pointer;
+    border:1px solid var(--line); background:rgba(255,255,255,.8); font-family:inherit;
+    font-size:13px; font-weight:800; color:var(--ink);}
+  .fltToggle .fcNum{font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:99px;
+    background:var(--soft); color:var(--muted); border:1px solid var(--line);}
+  .fltToggle .fcNum.on{background:#eef2ff; color:#3730a3; border-color:#c7d2fe;}
+  .fltBar{display:none;}
+  body.flt-open .fltBar{display:grid; grid-template-columns:1fr 1fr; gap:7px; align-items:center;}
+  body.flt-open .fltBar .fLbl{grid-column:1/-1; margin-top:2px;}
+  body.flt-open .fltBar select.fSel{max-width:none; width:100%; height:36px; font-size:12.5px;}
+  body.flt-open .fltBar .fCnt{grid-column:1/-1; text-align:center;}
+  body.flt-open .fltBar .btn{grid-column:1/-1; width:100%; justify-content:center; min-height:38px;}
+}
+/* טבלאות ההזנה והניסוי רחבות מהמסך. במובייל עמודת השם נדבקת לימין,
+   כך שגלילה אופקית לא משאירה אותך עם ציונים בלי לדעת של מי. */
+@media(max-width:820px){
+  .scroll{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  #entryCard .tbl th:first-child, #entryCard .tbl td:first-child,
+  #simCard .tbl th:first-child, #simCard .tbl td:first-child{
+    position:sticky; inset-inline-start:0; z-index:3; background:#fff;
+    box-shadow:1px 0 0 var(--line); max-width:118px;}
+  #entryCard .tbl thead th:first-child, #simCard .tbl thead th:first-child{z-index:4; background:var(--el2,#f8fafc);}
+  #entryCard .tbl td:first-child .name-link, #simCard .tbl td:first-child .name-link{
+    display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:110px;}
+}
 /* ============ מסך ההגדרות: כרטיסים אחידים ============ */
 .setTop{display:flex; align-items:center; gap:9px; flex-wrap:wrap; padding:9px 14px; margin-bottom:12px;
   background:rgba(255,255,255,.78); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
@@ -894,16 +926,17 @@ table.tbl.grades tbody tr:focus-within td:first-child{background:#eaf0ff;}
 .dense .badge{font-size:10px; padding:1px 6px;}
 .dense .gstatDot{width:9px; height:9px;}
 .dense button.rowCode{display:none;}
-/* ============ שלב 6 — סימולציה. השפה הכתומה נשמרת במלואה. ============ */
+/* ============ שלב 6 — סימולציה. כחול = פיקטיבי, בכל המסך ולא רק בתא. ============ */
+:root{--sim:#1d4ed8; --sim-soft:#eff4ff; --sim-line:#bfd3ff;}
 .simHero{display:flex; align-items:center; gap:14px; padding:11px 18px; margin-bottom:10px;
-  background:linear-gradient(120deg,rgba(245,158,11,.10),rgba(245,158,11,.04) 60%,rgba(255,255,255,0));
-  border:1px solid #fde68a; border-inline-start:4px solid var(--warn); border-radius:var(--r-lg); box-shadow:var(--el1); color:var(--warn);}
-.simHero .simIco{background:linear-gradient(140deg,#d97706,#f59e0b); box-shadow:0 4px 14px rgba(217,119,6,.3);}
-.simHero .hT{color:var(--ink);} .simHero .hS{color:#7c4a06;}
-.simHero .hArt{color:var(--warn); opacity:.4;}
+  background:linear-gradient(120deg,rgba(29,78,216,.10),rgba(29,78,216,.04) 60%,rgba(255,255,255,0));
+  border:1px solid var(--sim-line); border-inline-start:4px solid var(--sim); border-radius:var(--r-lg); box-shadow:var(--el1); color:var(--sim);}
+.simHero .simIco{background:linear-gradient(140deg,#1e40af,#3b82f6); box-shadow:0 4px 14px rgba(29,78,216,.3);}
+.simHero .hT{color:var(--ink);} .simHero .hS{color:#1e3a8a;}
+.simHero .hArt{color:var(--sim); opacity:.4;}
 .simCnt{display:inline-flex; align-items:center; font-size:11.5px; font-weight:800; padding:4px 11px; border-radius:var(--r-pill);
   background:var(--soft); color:var(--muted); border:var(--hair); white-space:nowrap;}
-.simCnt.on{background:#fff7ed; border-color:var(--warn); color:#b45309;}
+.simCnt.on{background:var(--sim-soft); border-color:var(--sim); color:var(--sim);}
 /* --- שלושת המצבים --- */
 .triState{display:flex; align-items:stretch; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
 .triState>svg{align-self:center; stroke:var(--muted); opacity:.5; flex:0 0 auto;}
@@ -913,7 +946,7 @@ table.tbl.grades tbody tr:focus-within td:first-child{background:#eaf0ff;}
 .tsBox b{font-family:var(--font-head,'Rubik'),sans-serif; font-size:13px; font-weight:800; color:var(--ink);}
 .tsBox i{font-style:normal; font-size:11px; font-weight:600; color:var(--muted);}
 .tsBox.real{border-color:#a7f3d0; background:#f6fffb; color:var(--ok);}
-.tsBox.sim{border-color:#fcd34d; background:#fffdf5; color:var(--warn);}
+.tsBox.sim{border-color:var(--sim-line); background:var(--sim-soft); color:var(--sim);}
 .tsBox.imp{border-color:#c7d2fe; background:#f7f8ff; color:var(--brand);}
 @media(max-width:820px){.triState>svg{display:none;} .tsBox{flex-basis:100%;}}
 /* --- כרטיסי תרחיש --- */
@@ -921,8 +954,8 @@ table.tbl.grades tbody tr:focus-within td:first-child{background:#eaf0ff;}
 .preCard{display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:right; cursor:pointer;
   font-family:inherit; padding:10px 12px; border-radius:var(--r-md); border:1.5px solid var(--line); background:#fff;
   transition:border-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease), transform var(--t-fast) var(--ease);}
-.preCard:hover{border-color:var(--warn); box-shadow:var(--el1); transform:translateY(-1px);}
-.preCard.on{border-color:var(--warn); background:#fffdf5; box-shadow:0 0 0 2px rgba(245,158,11,.16);}
+.preCard:hover{border-color:var(--sim); box-shadow:var(--el1); transform:translateY(-1px);}
+.preCard.on{border-color:var(--sim); background:var(--sim-soft); box-shadow:0 0 0 2px rgba(29,78,216,.16);}
 .preCard .preT{display:flex; align-items:center; gap:6px; font-family:var(--font-head,'Rubik'),sans-serif; font-size:13px; font-weight:800; color:var(--ink);}
 .preCard .preS{font-size:11px; font-weight:600; color:var(--muted); line-height:1.4;}
 .preRec{font-size:9.5px; font-weight:800; padding:1px 6px; border-radius:var(--r-pill); background:#fff7ed; color:#b45309; border:1px solid #fcd34d;}
@@ -2264,7 +2297,7 @@ function infoDlg(title,text){
 // טקסט מוסבר: גם tooltip וגם לחיצה (חובה במסך מגע)
 function tip(text,inner,cls){
   const t=String(text||'').replace(/"/g,'&quot;');
-  return `<span class="tipx ${cls||''}" title="${t}" onclick="event.stopPropagation();infoDlg('הסבר',${JSON.stringify(String(text||''))})">${inner}</span>`;
+  return `<span class="tipx ${cls||''}" title="${t}" onclick="event.stopPropagation();infoDlg('הסבר',${jsq(text)})">${inner}</span>`;
 }
 
 /* ============ אזורים מתקפלים ============ */
@@ -2291,17 +2324,27 @@ function noteChip(id,key,wide){
   const st=(state.students||[]).find(s=>s.id===id); if(!st) return '';
   const t=noteOf(st,key); if(!t) return '';
   const short=t.length>(wide?60:14)?t.slice(0,wide?60:14)+'…':t;
-  return `<button class="noteChip" onclick="event.stopPropagation();viewNote('${id}','${key}')"
+  return `<button class="noteChip" onclick="event.stopPropagation();openNote(${jsq(id)},${jsq(key)},${jsq(noteLabel(st,key))})"
     title="${esc(t)}">📝${wide?' '+esc(short):''}</button>`;
 }
+/* תווית קריאה לרכיב, כדי שחלון ההערה יידע על מה מדובר גם כשנפתח מהפתק */
+function noteLabel(st,key){
+  const p=String(key).split('.'); const sj=SUBJ_MAP[p[0]];
+  if(!sj) return String(key);
+  if(p.length===1) return 'הערה כללית — '+sj.name;
+  const u=getUnits(st,sj)||sj.opts[sj.opts.length-1];
+  const c=(sj.comps(u)[+p[1]]||{}).n||'';
+  return sj.name+(c?' · '+c:'');
+}
+/* צפייה בלבד — לדוחות ולמקומות שאין בהם עריכה */
 function viewNote(id,key){
   const st=(state.students||[]).find(s=>s.id===id); if(!st) return;
   const t=noteOf(st,key); if(!t) return;
-  infoDlg('📝 הערה — '+st.name, t+'\n\n(לעריכת ההערה — בלשונית הזנת ציונים או בכרטיס התלמידה)');
+  infoDlg('📝 הערה — '+st.name, t);
 }
 function noteBtn(st,key,label){
   const t=noteOf(st,key);
-  return `<button class="noteBtn ${t?'has':''}" onclick="event.stopPropagation();openNote('${st.id}','${key}','${esc(label).replace(/'/g,'')}')"
+  return `<button class="noteBtn ${t?'has':''}" onclick="event.stopPropagation();openNote(${jsq(st.id)},${jsq(key)},${jsq(label)})"
     title="${t?esc(t):'הוספת הערה'}">${ic('edit',13)}${t?'<span class="dot"></span>':''}</button>`;
 }
 let nd={id:'',key:'',label:''};
@@ -2320,7 +2363,7 @@ function openNote(id,key,label){
     <div class="toolbar" style="margin-top:10px; margin-bottom:0;">
       <button class="btn ok" onclick="saveNote()">שמירה</button>
       ${noteOf(st,key)?`<button class="btn dz sm" onclick="delNote()">מחיקת ההערה</button>`:''}
-      <span class="note" style="margin-inline-start:auto;">ההערות נכללות בייצוא לאקסל ובדוחות</span>
+      <span class="note" style="margin-inline-start:auto;">ההערה היא <b>נתון אמיתי</b> — נשמרת, מסתנכרנת ונכללת בייצוא ובדוחות, גם כשנכתבה מתוך הסימולציה.</span>
     </div>`;
   setTimeout(()=>{ const t=document.getElementById('ndText'); if(t) t.focus(); },100);
 }
@@ -3194,7 +3237,7 @@ function tabErrHtml(tabId,err){
       `אירעה שגיאה בהצגת <b>${esc(nm)}</b>. <b>הנתונים שלך בטוחים ולא נפגעו</b> — שאר המסכים עובדים כרגיל.`,null,
       [`<button class="btn" onclick="renderKeepScroll()">${ic('refresh',15)}נסי שוב</button>`,
        `<button class="btn sec" onclick="setTab('dash')">${ic('dash',15)}לדשבורד</button>`,
-       `<button class="btn sec" onclick="navigator.clipboard&&navigator.clipboard.writeText(${JSON.stringify(det)}).then(()=>toast('הפרטים הועתקו — אפשר לשלוח לתמיכה'))">${ic('clipboard',15)}העתקת פרטי השגיאה</button>`,
+       `<button class="btn sec" onclick="navigator.clipboard&&navigator.clipboard.writeText(${jsq(det)}).then(()=>toast('הפרטים הועתקו — אפשר לשלוח לתמיכה'))">${ic('clipboard',15)}העתקת פרטי השגיאה</button>`,
        `<button class="btn sec" onclick="exportJSON()">${ic('down',15)}גיבוי הנתונים</button>`])}
     <details style="margin-top:10px; font-size:12px; color:var(--muted);">
       <summary style="cursor:pointer; font-weight:700;">פרטים טכניים</summary>
@@ -3227,6 +3270,10 @@ function filteredStudents(cls){
   return state.students.filter(s=>!cls||s.cls===cls);
 }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/* טקסט שנכנס לתוך onclick חייב להיות מחרוזת JS תקינה *וגם* מאפיין HTML תקין.
+   גרש בשם כיתה או בהערה ("מועד ב'") שבר את המטפל והדפדפן זרק SyntaxError.
+   JSON.stringify מייצר מחרוזת JS חוקית; esc מגן על המאפיין. שניהם, תמיד. */
+function jsq(s){ return esc(JSON.stringify(String(s==null?'':s))); }
 
 /* ============ דשבורד ============ */
 /* ============ Smart Insights ============
@@ -3436,8 +3483,8 @@ function classSummary(){
         <span class="ccStat"><b>${miss}</b><i>עם חסרים</i></span>
       </div>
       <div class="ccAct">
-        <button class="btn sec sm" onclick="entryClass='${esc(c)}';setTab('entry')">${ic('pen',13)}הזנת ציונים</button>
-        <button class="btn sec sm" onclick="reportClass='${esc(c)}';setTab('reports')">${ic('file',13)}דוח</button>
+        <button class="btn sec sm" onclick="entryClass=${jsq(c)};setTab('entry')">${ic('pen',13)}הזנת ציונים</button>
+        <button class="btn sec sm" onclick="reportClass=${jsq(c)};setTab('reports')">${ic('file',13)}דוח</button>
       </div></div>`;
   }).join('');
   return `<div class="card cmpCard" style="margin-top:14px;">
@@ -3470,7 +3517,7 @@ function renderStudents(m){
       ${secHead('layers','ניהול כיתות','יצירת כיתות ומחיקתן')}
       <div class="toolbar"><input type="text" id="newClsName" placeholder="למשל: יב-3" style="width:140px;"><button class="btn ok sm" onclick="addClass()">${ic('plus',13)}כיתה</button></div>
       <div>${state.classes.map(c=>`<span class="pill" style="margin:3px; display:inline-block;">${esc(c)} · ${state.students.filter(s=>s.cls===c).length} תלמידות
-        <a style="color:var(--bad); cursor:pointer; font-weight:800;" onclick="delClass('${esc(c)}')">✕</a></span>`).join('')||'<span class="note">אין כיתות — צרי כיתה למעלה, או ייבאי קובץ אקסל והכיתה תיווצר אוטומטית</span>'}</div>
+        <a style="color:var(--bad); cursor:pointer; font-weight:800;" onclick="delClass(${jsq(c)})">✕</a></span>`).join('')||'<span class="note">אין כיתות — צרי כיתה למעלה, או ייבאי קובץ אקסל והכיתה תיווצר אוטומטית</span>'}</div>
       <div class="dangerZone">
         <span class="dzLink" onclick="toggleBox('danger')">${openBoxes.danger?'▴':'▾'} פעולות מחיקה ואיפוס</span>
         ${state.students.length?'':`<span class="dzLink" style="margin-inline-start:14px;" onclick="loadDemo()" title="יוצר 24 תלמידות בדיוניות — להתנסות בלבד">🎲 נתוני הדגמה</span>`}
@@ -3661,12 +3708,12 @@ function studentSubjEditor(st,subj){
         return `<button class="btn sec sm" data-k="s:${k}" style="padding:2px 6px; font-size:11px;" onclick="cycleGstat('${st.id}','${k}')" title="${s?esc(GSTAT[s].lbl):'דווח למשרד'} — לחצי להחלפה">${ic}</button>`; };
       if(c.t==='i'){
         return `<div class="comp-box" ${wOv?'style="border-color:var(--brand2);"':c.b?'style="background:#f0fdf4; border-color:#86efac;"':''}>
-        <button class="compHide" onclick="hideComp('${st.id}','${key}',${c.w||0},'${esc(c.n).replace(/'/g,"")}')" title="הסרת הרכיב">✕</button><div class="cn">${esc(c.n)}${c.b&&!c.w?' <span class="pill" style="background:#dcfce7; color:#166534;">לשיפור ציון — הזיני משקל להפעלה</span>':''}</div>
+        <button class="compHide" onclick="hideComp(${jsq(st.id)},${jsq(key)},${c.w||0},${jsq(c.n)})" title="הסרת הרכיב">✕</button><div class="cn">${esc(c.n)}${c.b&&!c.w?' <span class="pill" style="background:#dcfce7; color:#166534;">לשיפור ציון — הזיני משקל להפעלה</span>':''}</div>
         <div class="comp-row"><span class="lbl">ציון</span><input type="number" min="0" max="100" data-k="${key}" class="${gstatCls(st,key).trim()}${simCls(key)}" value="${gv[key]??''}" onchange="${isSim?`setGradeSim('${st.id}','${key}',this.value)`:`setGrade('${st.id}','${key}',this.value)`}">${isSim?'':stBtn(key)}
         ${(()=>{const det=(r.details||[])[i]; const v=det&&det.val!==null&&det.val!==undefined?det.val:null;
           return (v!==null&&c.w)?`<span class="pill" title="תרומה לציון הסופי">= ${Math.round(v*c.w/100*10)/10} נק׳ מתוך ${c.w}</span>`:'';})()}</div>
         ${isSim?'':`<div class="comp-row"><span class="lbl">משקל</span>${wIn}</div>`}
-        ${isSim?(noteOf(st,key)?`<div class="comp-row">${noteChip(st.id,key,1)}</div>`:''):codeOptions(key).length?`<div class="comp-row"><span class="lbl">סמל</span>${codeSelect(st,key)} ${noteBtn(st,key,subj.name+' · '+c.n)}</div>`:`<div class="comp-row">${noteBtn(st,key,subj.name+' · '+c.n)}</div>`}</div>`;
+        ${isSim?`<div class="comp-row"><span class="lbl">הערה</span>${noteBtn(st,key,subj.name+' · '+c.n)}${noteOf(st,key)?' '+noteChip(st.id,key,1):''}</div>`:codeOptions(key).length?`<div class="comp-row"><span class="lbl">סמל</span>${codeSelect(st,key)} ${noteBtn(st,key,subj.name+' · '+c.n)}</div>`:`<div class="comp-row">${noteBtn(st,key,subj.name+' · '+c.n)}</div>`}</div>`;
       }
       const fl=(r.flips||[]).find(f=>f.comp===c.n);
       const flBadge=fl?` <span class="badge b-warn" title="ציון הבחינה (${fl.e}) גבוה מהמגן (${fl.m}) — המשקל הגדול עבר לבחינה: מגן ${fl.s}% / בחינה ${100-fl.s}%">🔀 היפוך לטובת הבחינה</span>`:'';
@@ -3685,11 +3732,11 @@ function studentSubjEditor(st,subj){
       const rowM=eff>0?`<div class="comp-row"><span class="lbl">ציון מגן</span><input type="number" min="0" max="100" data-k="${key}.m" class="${gstatCls(st,key+'.m').trim()}${simCls(key+'.m')}" value="${gv[key+'.m']??''}" onchange="${isSim?`setGradeSim('${st.id}','${key}.m',this.value)`:`setGrade('${st.id}','${key}.m',this.value)`}">${isSim?'':stBtn(key+'.m')}<span class="pill">${eff}%</span></div>`:'';
       const rowE=eff<100?`<div class="comp-row"><span class="lbl">ציון בחינה</span><input type="number" min="0" max="100" data-k="${key}.e" class="${gstatCls(st,key+'.e').trim()}${simCls(key+'.e')}" value="${gv[key+'.e']??''}" onchange="${isSim?`setGradeSim('${st.id}','${key}.e',this.value)`:`setGrade('${st.id}','${key}.e',this.value)`}">${isSim?'':stBtn(key+'.e')}<span class="pill">${100-eff}%</span>${eff===0?' <span class="pill" style="background:#e0e7ff; color:#3730a3;">ללא מגן — 100% בחינה</span>':''}</div>`:'';
       return `<div class="comp-box" ${(wOv||sOv)?'style="border-color:var(--brand2); box-shadow:0 0 0 1px var(--brand2);"':''}>
-      <button class="compHide" onclick="hideComp('${st.id}','${key}',${c.w||0},'${esc(c.n).replace(/'/g,"")}')" title="הסרת הרכיב">✕</button><div class="cn">${esc(c.n)}${c.w?'':' <span class="pill">כבוי — הזיני משקל להפעלה</span>'}${flBadge}</div>
+      <button class="compHide" onclick="hideComp(${jsq(st.id)},${jsq(key)},${c.w||0},${jsq(c.n)})" title="הסרת הרכיב">✕</button><div class="cn">${esc(c.n)}${c.w?'':' <span class="pill">כבוי — הזיני משקל להפעלה</span>'}${flBadge}</div>
       ${rowM}${rowE}${rowFinal}
       ${isSim?'':`<div class="comp-row"><span class="lbl">חלוקה</span>${sSel}</div>
       <div class="comp-row"><span class="lbl">משקל</span>${wIn}</div>`}
-      ${isSim?(noteOf(st,key)?`<div class="comp-row">${noteChip(st.id,key,1)}</div>`:''):(codeOptions(key).length?`<div class="comp-row"><span class="lbl">סמל</span>${codeSelect(st,key)} ${noteBtn(st,key,subj.name+' · '+c.n)}</div>`:`<div class="comp-row">${noteBtn(st,key,subj.name+' · '+c.n)}</div>`)}</div>`;
+      ${isSim?`<div class="comp-row"><span class="lbl">הערה</span>${noteBtn(st,key,subj.name+' · '+c.n)}${noteOf(st,key)?' '+noteChip(st.id,key,1):''}</div>`:(codeOptions(key).length?`<div class="comp-row"><span class="lbl">סמל</span>${codeSelect(st,key)} ${noteBtn(st,key,subj.name+' · '+c.n)}</div>`:`<div class="comp-row">${noteBtn(st,key,subj.name+' · '+c.n)}</div>`)}</div>`;
     }).join('')}</div>`;
     const hid=comps.map((c,i)=>({c,i})).filter(x=>isHidden(st,subj.id+'.'+x.i));
     if(hid.length) body+=`<div class="hiddenChips"><span class="note" style="align-self:center;">רכיבים שהוסרו:</span>
@@ -3726,7 +3773,7 @@ function studentSubjEditor(st,subj){
       <span class="shL">
         <span class="sjName">${esc(subj.name)}</span>${nameInput}${unitsSel}${flags}
       </span>
-      <span class="shTools">${isSim?noteChip(st.id,subj.id):noteBtn(st,subj.id,'הערה כללית — '+subj.name)}${bonusBtn}${presetSel}${testChip}${resetBtn}</span>
+      <span class="shTools">${noteBtn(st,subj.id,'הערה כללית — '+subj.name)}${bonusBtn}${presetSel}${testChip}${resetBtn}</span>
       <span class="shScore">${finalHtml}</span>
     </div>
   <div class="subj-body">${body}</div></div>`;
@@ -3969,9 +4016,9 @@ function pickCode(stId,key){
       <button class="btn sec sm" onclick="document.getElementById('ndModal').classList.remove('show')">✕</button></div>
     <div class="note" style="margin-bottom:10px;">${esc(st.name)} · ${esc(subj?subj.name:'')} · ${esc(cn)}</div>
     <div class="symGrid">
-      ${opts.map(o=>`<button class="symBtn${cur===o?' on':''}" onclick="setCodePick('${stId}','${key}','${esc(o)}')">
+      ${opts.map(o=>`<button class="symBtn${cur===o?' on':''}" onclick="setCodePick(${jsq(stId)},${jsq(key)},${jsq(o)})">
         <b>${esc(codeShort(o))}</b><i>${esc(o)}</i></button>`).join('')}
-      ${(cur&&!opts.includes(cur))?`<button class="symBtn on" onclick="setCodePick('${stId}','${key}','${esc(cur)}')">
+      ${(cur&&!opts.includes(cur))?`<button class="symBtn on" onclick="setCodePick(${jsq(stId)},${jsq(key)},${jsq(cur)})">
         <b>${esc(codeShort(cur))}</b><i>${esc(cur)}</i></button>`:''}
     </div>
     <div class="toolbar" style="margin:12px 0 0;">
@@ -4145,7 +4192,12 @@ function fltBar(subj,total,shown){
   const sel=(k,ph,opts)=>`<select class="fSel${flt[k]?' on':''}" onchange="fltSet('${k}',this.value)">
     <option value="">${ph}</option>
     ${opts.map(([v,l])=>`<option value="${v}" ${String(flt[k])===String(v)?'selected':''}>${l}</option>`).join('')}</select>`;
-  return `<div class="fltBar">
+  const nOn=['u','fill','stat'].filter(k=>flt[k]).length;
+  return `<button class="fltToggle" onclick="document.body.classList.toggle('flt-open')">
+      <span>${ic('filter',14)} סינון ומיון</span>
+      <span class="fcNum${nOn?' on':''}">${nOn?nOn+' פעילים · '+shown+' מתוך '+total:total+' תלמידות'}</span>
+    </button>
+    <div class="fltBar">
     <span class="fLbl">${ic('search',14)} סינון</span>
     ${sel('u',uPh,uOpts)}
     ${sel('fill','מלאות וחסרות',[['miss',subj?'חסר ציון במקצוע':'חסר ציון באחד המקצועות'],['done',subj?'הושלם במקצוע':'כל המקצועות הושלמו']])}
@@ -4210,7 +4262,7 @@ function entryGrid(subj,studs){
         ? `<button class="rowCode${myCode?'':' empty'}" onclick="pickCode('${st.id}','${key}')" title="${myCode?('סמל שאלון '+esc(myCode)+' — לחצי לשינוי'):'בחירת סמל שאלון'}">${myCode?esc(codeShort(myCode)):'סמל +'}</button>`
         : ''}</div>`;
       if(c.t==='i'){
-        tds+=`<td class="${nt?'hasNote':''}" ${nt?`onclick="if(event.target===this)infoDlg('הערה',${JSON.stringify(nt)})"`:''}><div class="eWrap">${codeTag}<div class="eBox one"><div class="gcell"><small>&nbsp;</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}" class="${kc(key)}" ${ct(key)} value="${g[key]??''}" onchange="setGrade('${st.id}','${key}',this.value)">${dot(key)}</div></div></div></td>`;
+        tds+=`<td class="${nt?'hasNote':''}" ${nt?`onclick="if(event.target===this)viewNote(${jsq(st.id)},${jsq(key)})"`:''}><div class="eWrap">${codeTag}<div class="eBox one"><div class="gcell"><small>&nbsp;</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}" class="${kc(key)}" ${ct(key)} value="${g[key]??''}" onchange="setGrade('${st.id}','${key}',this.value)">${dot(key)}</div></div></div></td>`;
       }else{
         const eff=c.s;
         const eSplit=(r.flips||[]).some(f=>f.comp===c.n)?(100-eff):eff;   // אם היה היפוך — מציגים את החלוקה שבפועל
@@ -4219,7 +4271,7 @@ function entryGrid(subj,studs){
         const det=(r.details||[])[i], cv=(det&&det.val!==null&&det.val!==undefined)?Math.round(det.val):null;
         const flip=(r.flips||[]).some(f=>f.comp===c.n);
         const avgRow=(rM&&rE)?`<div class="eAvg${cv===null?' pend':''}" title="${flip?'היפוך אחוזים לטובת הבחינה':'משוקלל לפי החלוקה שהוגדרה'}">${cv===null?'<span class="lbl">ממתין לשני הציונים</span>':`${flip?'🔀 ':''}<span class="lbl">משוקלל </span><b>${cv}</b>`}</div>`:'';
-        tds+=`<td class="${nt?'hasNote':''}" ${nt?`onclick="if(event.target===this)infoDlg('הערה',${JSON.stringify(nt)})"`:''}><div class="eWrap">${codeTag}<div class="eBox">${rM}${rE}</div>${avgRow}</div></td>`;
+        tds+=`<td class="${nt?'hasNote':''}" ${nt?`onclick="if(event.target===this)viewNote(${jsq(st.id)},${jsq(key)})"`:''}><div class="eWrap">${codeTag}<div class="eBox">${rM}${rE}</div>${avgRow}</div></td>`;
       }
     });
     const flIc=(r.flips&&r.flips.length)?' <span title="היפוך אחוזים לטובת הבחינה ב: '+esc(r.flips.map(f=>f.comp).join(', '))+'">🔀</span>':'';
@@ -4642,7 +4694,7 @@ function renderSim(m){
     </span>
     <span class="hAct">
       <span class="simCnt ${nSim?'on':''}">${nSim} שינויי ניסוי</span>
-      <button class="btn warn sm" onclick="clearSim()" ${nSim?'':'disabled style="opacity:.5;"'}>${ic('refresh',14)}מחיקת השינויים</button>
+      <button class="btn simClear sm" onclick="clearSim()" ${nSim?'':'disabled style="opacity:.5;"'}>${ic('refresh',14)}מחיקת השינויים</button>
     </span>
     <span class="hArt">${art('lab')}</span>
   </div>
@@ -4670,7 +4722,7 @@ function renderSim(m){
       <h3 class="sec" style="margin:0;">✏️ טבלת הניסוי — שני ציונים חופשי</h3>
       <div style="display:flex; gap:6px;">
         <button class="btn sec sm" onclick="simDense=!simDense;renderKeepScroll()" title="שורות צפופות — יותר תלמידות במסך">${simDense?'↕️ שורות רגילות':'📋 תצוגה צפופה'}</button>
-        <button class="btn ${simFull?'warn':'sec'} sm" onclick="toggleSimFull()" title="מסך מלא (Esc ליציאה)">${simFull?'✕ יציאה ממסך מלא':'⛶ מסך מלא'}</button>
+        <button class="btn ${simFull?'simClear':'sec'} sm" onclick="toggleSimFull()" title="מסך מלא (Esc ליציאה)">${simFull?'✕ יציאה ממסך מלא':'⛶ מסך מלא'}</button>
       </div>
     </div>
     <div class="toolbar">
@@ -4775,7 +4827,7 @@ function simGrid(subj,studs){
                     :`<span class="badge b-bad" style="font-size:11px;">לא ניתן</span>`;
         }
         const ntS=noteOf(st,key);
-        tds+=`<td class="${ntS?'hasNote':''}" ${ntS?`onclick="if(event.target===this)viewNote('${st.id}','${key}')"`:''}><div class="eWrap"><div class="eTag">${ntS?noteChip(st.id,key):''}</div><div class="eBox one"><div class="gcell"><small>&nbsp;</small><input type="number" min="0" max="100" data-k="s|${st.id}|${key}" class="${cls(key)}" value="${g[key]??''}" onchange="setGradeSim('${st.id}','${key}',this.value)">${need}</div></div></div></td>`;
+        tds+=`<td class="${ntS?'hasNote':''}"><div class="eWrap"><div class="eTag">${noteBtn(st,key,subj.name+' · '+(c.n||''))}${ntS?noteChip(st.id,key):''}</div><div class="eBox one"><div class="gcell"><small>&nbsp;</small><input type="number" min="0" max="100" data-k="s|${st.id}|${key}" class="${cls(key)}" value="${g[key]??''}" onchange="setGradeSim('${st.id}','${key}',this.value)">${need}</div></div></div></td>`;
       }else{
         const eff=c.s;
         const eSplit=(rSim.flips||[]).some(f=>f.comp===c.n)?(100-eff):eff;
@@ -4784,7 +4836,7 @@ function simGrid(subj,studs){
         const dvS=(rSim.details||[])[i], cvS=(dvS&&dvS.val!==null&&dvS.val!==undefined)?Math.round(dvS.val):null;
         const avgS=(rM&&rE)?`<div class="eAvg${cvS===null?' pend':''}">${cvS===null?'ממתין לשני הציונים':`משוקלל <b>${cvS}</b>`}</div>`:'';
         const ntM=noteOf(st,key);
-        tds+=`<td class="${ntM?'hasNote':''}" ${ntM?`onclick="if(event.target===this)viewNote('${st.id}','${key}')"`:''}><div class="eWrap"><div class="eTag">${ntM?noteChip(st.id,key):''}</div><div class="eBox">${rM}${rE}</div>${avgS}</div></td>`;
+        tds+=`<td class="${ntM?'hasNote':''}"><div class="eWrap"><div class="eTag">${noteBtn(st,key,subj.name+' · '+(c.n||''))}${ntM?noteChip(st.id,key):''}</div><div class="eBox">${rM}${rE}</div>${avgS}</div></td>`;
       }
     });
     // מבחני כיתה — לא נכנסים לציון הרשמי, רק משפרים את החיזוי
@@ -6130,7 +6182,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='10.6';
+const APP_VERSION='11.0';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
