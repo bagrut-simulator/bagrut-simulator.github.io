@@ -6182,7 +6182,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='11.0';
+const APP_VERSION='11.1';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -6708,10 +6708,23 @@ async function diagText(){
   profiles.forEach(pr=>{
     const st=(pr.id===currentProfileId)?state:loadProfileState(pr.id);
     const b=loadBase(pr.id);
-    L.push('  ['+pr.id+'] "'+(pr.name||'(ללא שם)')+'"'+(pr.unnamed?' אלמוני':'')
-      +' · תלמידות='+((st&&st.students||[]).length)
-      +' · גרסה מקומית='+localVer(pr.id)
+    const studs=(st&&st.students)||[];
+    let nG=0, withG=0, nNotes=0, nSim=0;
+    studs.forEach(s=>{ const k=Object.keys(s.grades||{}).length; nG+=k; if(k) withG++;
+      nNotes+=Object.keys(s.notes||{}).length; nSim+=Object.keys(s.simg||{}).length; });
+    const logoKB=st&&st.logo?Math.round(String(st.logo).length/1024):0;
+    const sizeKB=st?Math.round(JSON.stringify(st).length/1024):0;
+    L.push('  ['+pr.id+'] "'+(pr.name||'(ללא שם)')+'"'+(pr.unnamed?' אלמוני':'')+(pr.id===currentProfileId?' ← הפעיל':''));
+    L.push('      תלמידות='+studs.length+' · עם ציונים='+withG+' · סה"כ ציונים='+nG
+      +' · הערות='+nNotes+' · ניסוי='+nSim);
+    L.push('      גודל='+sizeKB+'KB (מזה לוגו '+logoKB+'KB) · גרסה מקומית='+localVer(pr.id)
       +' · נקודת מקור='+(b?((b.students||[]).length+' תלמידות'):'אין'));
+    // פירוט לפי מקצוע — כדי לראות אם ציונים נעלמו ממקצוע מסוים
+    const per={};
+    studs.forEach(s=>Object.keys(s.grades||{}).forEach(k=>{ const sid=String(k).split('.')[0]; per[sid]=(per[sid]||0)+1; }));
+    const top=Object.keys(per).sort((a,b2)=>per[b2]-per[a]).slice(0,8)
+      .map(sid=>((SUBJ_MAP[sid]||{}).name||sid)+'='+per[sid]);
+    L.push('      ציונים לפי מקצוע: '+(top.join(' · ')||'אין ציונים כלל'));
   });
   L.push('');
   L.push('— קבצים בדרייב —');
