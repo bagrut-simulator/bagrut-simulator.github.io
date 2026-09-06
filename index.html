@@ -393,6 +393,14 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
 .noteBtn:hover{background:var(--soft); color:var(--brand); border-color:var(--brand);}
 .noteBtn.has{background:#fffbeb; border-color:#f59e0b; color:#b45309;}
 .noteBtn .dot{position:absolute; top:-3px; inset-inline-end:-3px; width:7px; height:7px; border-radius:50%; background:#f59e0b; border:1.5px solid #fff;}
+/* בטבלאות הצפופות: הכפתור כמעט שקוף עד שעוברים עליו, או כשיש הערה */
+.tbl .eWrap .noteBtn{opacity:.28; padding:1px 4px; border-color:transparent;}
+.tbl tr:hover .eWrap .noteBtn, .tbl .eWrap .noteBtn:focus{opacity:1; border-color:var(--line);}
+.tbl .eWrap .noteBtn.has{opacity:1;}
+@media (hover:none){ .tbl .eWrap .noteBtn{opacity:.55; min-height:24px;} }
+.moeChip{display:inline-flex; align-items:center; gap:3px; background:#eef2ff; border:1px solid #c7d2fe;
+  color:#3730a3; border-radius:999px; padding:1px 7px; font-size:10.5px; font-weight:800; white-space:nowrap;}
+.moeChip svg{width:11px; height:11px; stroke:currentColor;}
 .noteChip{background:#fffbeb; border:1px solid #fcd34d; color:#92400e; border-radius:999px;
   padding:1px 6px; font-size:11px; line-height:1.5; cursor:pointer; max-width:100%;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700;}
@@ -3802,6 +3810,7 @@ function openStudent(id,mode){
    :`<div class="stLg">${statusLegend()}</div>`}
   </div>
   <div class="stBody">
+  ${isSim?'':`<div class="card" style="padding:10px 13px; margin-bottom:10px;">${tzFieldHtml(st)}</div>`}
   ${SUBJECTS.map(subj=>studentSubjEditor(st,subj)).join('')}
   <div style="text-align:left; margin-top:10px;"><button class="btn" onclick="closeStudent()">שמירה וסגירה</button></div>
   </div>`;
@@ -3970,6 +3979,34 @@ function setGrade(id,key,val){
   const modal=document.getElementById('studentModal');
   if(modal&&modal.classList.contains('show')) refreshOpenViews(id);
   else renderKeepScroll();
+}
+/* תעודת זהות: נשמרת ומסתנכרנת, אך מוצגת רק בלחיצה.
+   הרכזת צריכה אותה פעם אחת — בהתאמה הראשונה מול דוח המשרד. */
+let tzShow={};
+function setTz(id,val){
+  const st=state.students.find(s=>s.id===id); if(!st) return;
+  const d=String(val||'').replace(/[^0-9]/g,'').slice(0,9);
+  if(d) st.tz=d; else delete st.tz;
+  save(); refreshOpenViews(id);
+}
+function toggleTz(id){ tzShow[id]=!tzShow[id]; refreshOpenViews(id); }
+function tzMask(v){ const s=String(v||''); return s?('•'.repeat(Math.max(0,s.length-4))+s.slice(-4)):''; }
+/* הציון הסופי של המשרד נשמר כפי שהוא ומוצג להשוואה — לא נכנס לחישוב */
+function moeChip(st,key){
+  const m=(st.moe||{})[key]; if(!m||m.f===null||m.f===undefined) return '';
+  return `<span class="moeChip" title="הציון הרשמי שהתקבל ממשרד החינוך${m.moed?' · '+esc(m.moed):''}${m.year?' '+esc(m.year):''}">
+    ${ic('shield',11)}משרד ${m.f}</span>`;
+}
+function tzFieldHtml(st){
+  const on=!!tzShow[st.id], v=st.tz||'';
+  return `<div class="gRow"><label>תעודת זהות
+      <button class="btn sec sm" style="padding:1px 7px; font-size:11px; margin-inline-start:6px;"
+        onclick="toggleTz(${jsq(st.id)})" title="${on?'הסתרה':'הצגה'}">${on?'🙈 הסתר':'👁 הצג'}</button></label>
+    ${on
+      ? `<input type="text" inputmode="numeric" maxlength="9" value="${esc(v)}" placeholder="9 ספרות"
+           onchange="setTz(${jsq(st.id)},this.value)" style="letter-spacing:1px;">`
+      : `<div class="note" style="padding:7px 2px;">${v?esc(tzMask(v)):'לא הוזנה'} — נדרשת לייבוא ציונים ממשרד החינוך</div>`}
+  </div>`;
 }
 function setUnits(id,sid,val){
   const st=state.students.find(s=>s.id===id); if(!st) return;
@@ -4397,7 +4434,7 @@ function entryGrid(subj,studs){
         ? `<button class="rowCode${myCode?'':' empty'}" onclick="pickCode('${st.id}','${key}')" title="${myCode?('סמל שאלון '+esc(myCode)+' — לחצי לשינוי'):'בחירת סמל שאלון'}">${myCode?esc(codeShort(myCode)):'סמל +'}</button>`
         : ''}</div>`;
       if(c.t==='i'){
-        tds+=`<td class="${nt?'hasNote':''}" ${nt?`onclick="if(event.target===this)viewNote(${jsq(st.id)},${jsq(key)})"`:''}><div class="eWrap">${codeTag}<div class="eBox one"><div class="gcell"><small>&nbsp;</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}" class="${kc(key)}" ${ct(key)} value="${g[key]??''}" onchange="setGrade('${st.id}','${key}',this.value)">${dot(key)}</div></div></div></td>`;
+        tds+=`<td class="${nt?'hasNote':''}"><div class="eWrap">${codeTag}${noteBtn(st,key,subj.name+' · '+(c.n||''))}${nt?noteChip(st.id,key):''}<div class="eBox one"><div class="gcell"><small>&nbsp;</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}" class="${kc(key)}" ${ct(key)} value="${g[key]??''}" onchange="setGrade('${st.id}','${key}',this.value)">${dot(key)}</div></div></div></td>`;
       }else{
         const eff=c.s;
         const eSplit=(r.flips||[]).some(f=>f.comp===c.n)?(100-eff):eff;   // אם היה היפוך — מציגים את החלוקה שבפועל
@@ -4406,7 +4443,7 @@ function entryGrid(subj,studs){
         const det=(r.details||[])[i], cv=(det&&det.val!==null&&det.val!==undefined)?Math.round(det.val):null;
         const flip=(r.flips||[]).some(f=>f.comp===c.n);
         const avgRow=(rM&&rE)?`<div class="eAvg${cv===null?' pend':''}" title="${flip?'היפוך אחוזים לטובת הבחינה':'משוקלל לפי החלוקה שהוגדרה'}">${cv===null?'<span class="lbl">ממתין לשני הציונים</span>':`${flip?'🔀 ':''}<span class="lbl">משוקלל </span><b>${cv}</b>`}</div>`:'';
-        tds+=`<td class="${nt?'hasNote':''}" ${nt?`onclick="if(event.target===this)viewNote(${jsq(st.id)},${jsq(key)})"`:''}><div class="eWrap">${codeTag}<div class="eBox">${rM}${rE}</div>${avgRow}</div></td>`;
+        tds+=`<td class="${nt?'hasNote':''}"><div class="eWrap">${codeTag}${noteBtn(st,key,subj.name+' · '+(c.n||''))}${nt?noteChip(st.id,key):''}<div class="eBox">${rM}${rE}</div>${avgRow}${moeChip(st,key)}</div></td>`;
       }
     });
     const flIc=(r.flips&&r.flips.length)?' <span title="היפוך אחוזים לטובת הבחינה ב: '+esc(r.flips.map(f=>f.comp).join(', '))+'">🔀</span>':'';
@@ -6010,6 +6047,173 @@ async function exportStyled(cls,studs,sumRows,rawRows,anRows,fname){
   ];
   await writeStyledXlsx(specs,fname);
 }
+/* ═══════════════════════════════════════════════════════════════
+   ייבוא דוח ציונים של משרד החינוך  (BbgTziyunimLesheelon_Excel)
+   שורה לכל תלמידה × שאלון. הציונים שמורים כטקסט, יש שורות זבל בלי
+   סמל שאלון, וסמל אחד יכול להתאים לשתי רובריקות (אנגלית ב׳/ג׳).
+   ═══════════════════════════════════════════════════════════════ */
+const MOE_SHEET='BbgTziyunimLesheelon_Excel';
+const MOE_COL={
+  gap:'פער בין ציון בחינה לציון שנתי', final:'ציון סופי', exam:'ציון בחינה',
+  book:'התקבלה מחברת', school:'ציון בית ספרי', cls:'כיתת אם', name:'שם תלמיד',
+  tz:'תעודת זהות תלמיד', qname:'שם שאלון', qcode:'סמל שאלון', moed:'מועד', year:'שנה'
+};
+/* אינדקס הפוך: ספרות הסמל → רשימת מפתחות רכיב אפשריים */
+let MOE_BYCODE=null;
+function moeCodeIndex(){
+  if(MOE_BYCODE) return MOE_BYCODE;
+  MOE_BYCODE={};
+  Object.keys(CODE_OPTIONS).forEach(key=>{
+    CODE_OPTIONS[key].forEach(opt=>{
+      const d=String(opt).replace(/[^0-9]/g,'');
+      if(!d) return;
+      (MOE_BYCODE[d]=MOE_BYCODE[d]||[]).push({key,opt});
+    });
+  });
+  return MOE_BYCODE;
+}
+function moeNum(v){
+  if(v===null||v===undefined) return null;
+  const s=String(v).trim().replace(/[\u200e\u200f,]/g,'');
+  if(!s) return null;
+  const n=Number(s);
+  return Number.isFinite(n)?n:null;
+}
+function moeTz(v){ const s=String(v==null?'':v).replace(/[^0-9]/g,''); return s?s.padStart(9,'0'):''; }
+/* האם החוברת היא דוח של משרד החינוך */
+function moeDetect(wb){
+  if(!wb||!wb.SheetNames) return null;
+  const exact=wb.SheetNames.find(n=>n===MOE_SHEET);
+  if(exact) return exact;
+  // גיבוי: גיליון שיש בו את שלוש הכותרות המזהות
+  return wb.SheetNames.find(n=>{
+    try{
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:null,raw:true});
+      if(!rows.length) return false;
+      const k=Object.keys(rows[0]).join('|');
+      return k.includes(MOE_COL.qcode)&&k.includes(MOE_COL.exam)&&k.includes(MOE_COL.school);
+    }catch(e){ return false; }
+  })||null;
+}
+/* פירוק הקובץ לרשומות נקיות */
+function moeParse(wb,sheetName){
+  const ws=wb.Sheets[sheetName];
+  const raw=XLSX.utils.sheet_to_json(ws,{defval:null,raw:true});
+  const idx=moeCodeIndex();
+  const recs=[], skipped=[], unknown={};
+  raw.forEach((r,i)=>{
+    const code=moeNum(r[MOE_COL.qcode]);
+    if(!code){ skipped.push({row:i+2,why:'אין סמל שאלון'}); return; }   // שורות זבל
+    const digits=String(code);
+    const cand=idx[digits];
+    if(!cand||!cand.length){
+      unknown[digits]=(unknown[digits]||0)+1;
+      skipped.push({row:i+2,why:'סמל '+digits+' אינו בקטלוג',code:digits,qname:String(r[MOE_COL.qname]||'')});
+      return;
+    }
+    recs.push({
+      row:i+2,
+      tz:moeTz(r[MOE_COL.tz]),
+      name:String(r[MOE_COL.name]||'').trim(),
+      cls:String(r[MOE_COL.cls]||'').trim(),
+      code:digits, qname:String(r[MOE_COL.qname]||'').trim(),
+      cand,
+      school:moeNum(r[MOE_COL.school]),
+      exam:moeNum(r[MOE_COL.exam]),
+      final:moeNum(r[MOE_COL.final]),
+      book:String(r[MOE_COL.book]||'').trim()==='כן',
+      moed:String(r[MOE_COL.moed]||'').trim(),
+      year:String(r[MOE_COL.year]||'').trim()
+    });
+  });
+  return {recs,skipped,unknown};
+}
+/* התאמת רשומה לתלמידה: ת"ז קודם, ואם אין — שם מנורמל */
+function moeNormName(s){ return String(s||'').replace(/\s+/g,' ').trim(); }
+function moeMatch(recs,studs){
+  const byTz={}, byName={};
+  studs.forEach(st=>{
+    if(st.tz) byTz[moeTz(st.tz)]=st;
+    const n=moeNormName(st.name); if(n) (byName[n]=byName[n]||[]).push(st);
+  });
+  const matched=[], unmatched=[];
+  recs.forEach(r=>{
+    let st=r.tz?byTz[r.tz]:null, how=st?'tz':'';
+    if(!st&&r.name){ const l=byName[moeNormName(r.name)]; if(l&&l.length===1){ st=l[0]; how='name'; } }
+    if(st) matched.push({...r,st,how}); else unmatched.push(r);
+  });
+  return {matched,unmatched};
+}
+/* בחירת הרכיב שאליו הציון שייך, כשסמל אחד מתאים לכמה רובריקות.
+   מחזיר גם למה נבחר — כי במקרה אחד הבחירה אינה ודאית והמשתמשת חייבת לדעת. */
+function moePickKey(st,rec){
+  const g=st.grades||{}, codes=st.codes||{};
+  const has=k=>g[k+'.m']!==undefined||g[k+'.e']!==undefined;
+  // 1. רובריקה שכבר מסומנת בסמל הזה — הוודאות הגבוהה ביותר
+  for(const c of rec.cand){
+    if(String(codes[c.key]||'').replace(/[^0-9]/g,'')===rec.code) return {...c,why:'code'};
+  }
+  // 2. רובריקה עם ציונים אך בלי סמל — לא ידוע אם אלה אותם ציונים.
+  //    בוחרים אותה בכוונה, כדי שההשוואה תציג סתירה במקום לשפוך לרובריקה אחרת בשקט.
+  for(const c of rec.cand){
+    if(has(c.key)&&!codes[c.key]) return {...c,why:'ambiguous'};
+  }
+  // 3. רובריקה ריקה לגמרי
+  for(const c of rec.cand){
+    if(!has(c.key)&&!codes[c.key]) return {...c,why:'empty'};
+  }
+  return {...rec.cand[0],why:'fallback'};
+}
+/* השוואה: מה חדש, מה זהה, מה סותר */
+function moeDiff(matched){
+  const out=[];
+  matched.forEach(rec=>{
+    const st=rec.st, c=moePickKey(st,rec), key=c.key;
+    const g=st.grades||{};
+    const add=(part,field,val)=>{
+      if(val===null) return;
+      const k=key+'.'+part, cur=g[k];
+      const cmp=(cur===undefined||cur===null)?'new':(Number(cur)===Number(val)?'same':'conflict');
+      out.push({rec,st,key,k,part,label:field,cur:cur===undefined?null:cur,val,state:cmp,why:c.why});
+    };
+    add('m','מגן',rec.school);
+    add('e','בחינה',rec.exam);
+    // סמל שאלון
+    const curCode=String((st.codes||{})[key]||'');
+    if(String(c.opt)!==curCode){
+      out.push({rec,st,key,k:key,part:'code',label:'סמל שאלון',cur:curCode||null,val:c.opt,
+        state:curCode?'conflict':'new',why:c.why});
+    }
+  });
+  return out;
+}
+/* ═══ החלה ═══
+   כל ציון שנכנס מהקובץ מסומן כמדווח (שחור) — כי זו בדיוק המשמעות שלו.
+   הציון הסופי של המשרד נשמר בנפרד ב-moe, ואינו נכנס למנוע החישוב:
+   בבדיקה מול 38 שורות אמיתיות הוא היה גבוה ב-1 עד 3 נקודות מהנוסחה,
+   ולכן אין דרך לשחזר אותו — אבל כן צריך לראות אותו. */
+function moeApply(diff,picks){
+  let nG=0,nC=0,nF=0;
+  const seen={};
+  diff.forEach((x,i)=>{
+    if(x.state==='same') return;
+    if(x.state==='conflict'&&(picks[i]||'file')!=='file') return;   // המשתמשת בחרה להשאיר את שלה
+    const st=(state.students||[]).find(s=>s.id===x.st.id); if(!st) return;
+    if(x.part==='code'){ st.codes=st.codes||{}; st.codes[x.key]=x.val; nC++; return; }
+    st.grades=st.grades||{};
+    st.grades[x.k]=x.val;
+    if(st.gstat) delete st.gstat[x.k];        // הגיע מהמשרד ⇒ מדווח ⇒ שחור
+    nG++;
+    const sig=st.id+'|'+x.key;
+    if(!seen[sig]){
+      seen[sig]=1;
+      st.moe=st.moe||{};
+      st.moe[x.key]={f:x.rec.final,moed:x.rec.moed,year:x.rec.year,book:x.rec.book,at:Date.now()};
+      if(x.rec.final!==null) nF++;
+    }
+  });
+  return {nG,nC,nF};
+}
 /* ייבוא חכם של קובץ הסימולטור המקורי (אקסל) — מזהה את המבנה וממלא את כל הציונים */
 function parseSimulatorWorkbook(wb){
   const ws=wb.Sheets['סימולטור למגזר ממלכתי דתי'];
@@ -6120,6 +6324,8 @@ function importExcel(input){
     try{
       const wb=XLSX.read(e.target.result,{type:'array',bookFiles:true});
       if(wb.SheetNames.includes('סימולטור למגזר ממלכתי דתי')){ importSimulator(wb); input.value=''; return; }
+      const moeSheet=moeDetect(wb);
+      if(moeSheet){ moeStart(wb,moeSheet); input.value=''; return; }   // דוח ציונים של משרד החינוך
       const wsName=wb.SheetNames.includes('נתונים גולמיים')?'נתונים גולמיים':wb.SheetNames[0];
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[wsName]);
       if(!rows.length){toast('הגיליון ריק');return;}
@@ -6506,7 +6712,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='12.3';
+const APP_VERSION='13.2';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -6771,11 +6977,16 @@ async function driveWrite(pid,pl){
 /* ---- סנכרון ---- */
 /* נקודת המקור למיזוג: העותק שעליו שני המכשירים הסכימו בפעם האחרונה.
    בלעדיו אי אפשר להבדיל בין "אני שיניתי" לבין "שניים שינו" — וכל הבדל היה נהפך לשאלה. */
-const MRG_FLD=['grades','gstat','codes','notes','ov','units','mugbarNames','shw','hid','tests'];
+const MRG_FLD=['grades','gstat','codes','notes','ov','units','mugbarNames','shw','hid','tests','moe'];
+/* שדות שאינם מפה אלא ערך יחיד — לא ניתן למזג אותם מפתח-מפתח */
+const MRG_SCALAR=['tz'];
 function baseOf(stt){
   if(!stt) return null;
   return {classes:(stt.classes||[]).slice(), students:(stt.students||[]).map(s=>{
-    const o={id:s.id}; MRG_FLD.forEach(f=>{ if(s[f]) o[f]=s[f]; }); return o; })};
+    const o={id:s.id};
+    MRG_FLD.forEach(f=>{ if(s[f]) o[f]=s[f]; });
+    MRG_SCALAR.forEach(f=>{ if(s[f]!==undefined) o[f]=s[f]; });
+    return o; })};
 }
 function saveBase(pid,stt){ try{ LS.setItem('bagrutDvBase:'+pid,JSON.stringify(baseOf(stt))); }catch(e){} }
 function loadBase(pid){ try{ return JSON.parse(LS.getItem('bagrutDvBase:'+pid)||'null'); }catch(e){ return null; } }
@@ -6916,6 +7127,13 @@ function mergeStates(mine,theirs,base){
   Object.keys(M).forEach(id=>{
     const m=M[id], t=O[id], b=B[id]||{};
     if(!t) return;
+    MRG_SCALAR.forEach(fld=>{
+      const a=m[fld], c2=t[fld], z=b[fld];
+      if(JSON.stringify(a)===JSON.stringify(c2)) return;             // זהה
+      if(JSON.stringify(c2)===JSON.stringify(z)){ t[fld]=a; return; } // רק אני שיניתי
+      if(JSON.stringify(a)===JSON.stringify(z)) return;               // רק הם שינו
+      clash.push({id,name:m.name,fld,key:fld,mine:a,theirs:c2});      // שניים שינו
+    });
     MRG_FLD.forEach(fld=>{                       // מקור אמת אחד לרשימת השדות — לא רשימה שנייה שתיפרד
       const mm=m[fld]||{}, tt=t[fld]||{}, bb=b[fld]||{};
       t[fld]=t[fld]||{};
@@ -7012,6 +7230,102 @@ async function driveResolve(){
   render();
   await driveSave(cf.pid,true);
   toast('הנתונים מוזגו וסונכרנו');
+}
+
+/* נקודת הכניסה: מפרק, מתאים, משווה, ומציג — בלי לגעת בנתונים */
+function moeStart(wb,sheetName){
+  let parsed;
+  try{ parsed=moeParse(wb,sheetName); }
+  catch(err){ toast('הקובץ לא נקרא: '+(err&&err.message||'')); return; }
+  if(!parsed.recs.length){
+    const un=Object.keys(parsed.unknown);
+    infoDlg('ייבוא ציוני בגרות',
+      'לא נמצאה אף שורה שניתן לייבא.'+
+      (un.length?('\n\nסמלי שאלון שאינם בקטלוג: '+un.join(', ')+
+        '\n\nאפשר להוסיף אותם — פנו לספק עם מספרי השאלונים.'):''));
+    return;
+  }
+  const m=moeMatch(parsed.recs,state.students||[]);
+  if(!m.matched.length){
+    infoDlg('ייבוא ציוני בגרות',
+      `הקובץ מכיל ${parsed.recs.length} שורות, אך אף אחת לא הותאמה לתלמידה בסימולטור.\n\n`+
+      'ההתאמה נעשית לפי תעודת זהות. יש להזין ת"ז לתלמידות — בכרטיס התלמידה או בלשונית תלמידות.');
+    return;
+  }
+  moeReview({
+    diff:moeDiff(m.matched),
+    unmatched:m.unmatched, skipped:parsed.skipped, unknown:parsed.unknown,
+    moed:(parsed.recs[0].moed||'')+(parsed.recs[0].year?' '+parsed.recs[0].year:'')
+  });
+}
+
+/* ═══ מסך ההשוואה של הייבוא ═══ */
+let moeJob=null;
+function moeReview(job){
+  moeJob=job; moeJob.picks={};
+  const box=document.getElementById('cfBox'), md=document.getElementById('cfModal');
+  if(!box||!md) return;
+  moeRenderReview();
+  md.classList.add('show');
+}
+function moeRenderReview(){
+  const box=document.getElementById('cfBox'); if(!box||!moeJob) return;
+  const d=moeJob.diff;
+  const nNew=d.filter(x=>x.state==='new').length;
+  const nSame=d.filter(x=>x.state==='same').length;
+  const conf=d.map((x,i)=>({x,i})).filter(o=>o.x.state==='conflict');
+  const amb=d.filter(x=>x.why==='ambiguous').length;
+  const lbl=p=>p==='m'?'מגן':p==='e'?'בחינה':'סמל שאלון';
+  const subjOf=k=>{ const sj=SUBJ_MAP[String(k).split('.')[0]]; return sj?sj.name:k; };
+  const compOf=(st,k)=>{ const p=String(k).split('.'); const sj=SUBJ_MAP[p[0]]; if(!sj) return k;
+    const u=getUnits(st,sj)||sj.opts[sj.opts.length-1];
+    return (sj.comps(u)[+p[1]]||{}).n||k; };
+  box.innerHTML=`
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+    <h2 class="sec" style="margin:0;">${ic('file',18)}ייבוא ציוני בגרות${moeJob.moed?' · '+esc(moeJob.moed):''}</h2>
+    <button class="btn sec sm" onclick="moeClose()">${ic('x',14)}ביטול</button>
+  </div>
+  <div class="lossBox" style="margin:0 0 10px;">
+    <div class="lossHead">${ic('shield',15)}<span>שום ציון לא ישתנה עד שתאשרי</span></div>
+    <div style="font-size:13px; line-height:1.8;">
+      <b>${nNew}</b> ציונים חדשים ייכנסו · <b>${nSame}</b> כבר זהים · <b class="${conf.length?'g-red':''}">${conf.length}</b> סותרים
+      ${moeJob.unmatched.length?` · <b>${moeJob.unmatched.length}</b> שורות ללא תלמידה מתאימה`:''}
+      ${amb?`<br><span class="g-red">⚠️ ${amb} מהם ברובריקה שיש בה ציונים בלי סמל שאלון — לא ודאי שזו אותה בחינה.</span>`:''}
+      <br>כל ציון שייכנס יסומן <b>שחור — דווח למשרד</b>.
+    </div>
+  </div>
+  ${conf.length?`
+  <div class="scroll" style="max-height:42vh;"><table class="tbl"><thead><tr>
+    <th>תלמידה</th><th>מה</th><th>אצלך</th><th>בקובץ</th><th>בחירה</th></tr></thead><tbody>
+  ${conf.map(({x,i})=>`<tr>
+    <td style="font-weight:700;">${esc(x.st.name)}<br><small class="note">${esc(x.st.cls||'')}</small></td>
+    <td>${esc(subjOf(x.key))} · ${esc(compOf(x.st,x.key))}<br><small class="note">${lbl(x.part)}${x.why==='ambiguous'?' · <span class="g-red">רובריקה לא ודאית</span>':''}</small></td>
+    <td class="${(moeJob.picks[i]||'file')==='mine'?'g-red':''}" style="font-weight:800;">${esc(String(x.cur??'—'))}</td>
+    <td class="${(moeJob.picks[i]||'file')==='file'?'g-red':''}" style="font-weight:800;">${esc(String(x.val??'—'))}</td>
+    <td><button class="btn ${(moeJob.picks[i]||'file')==='mine'?'ok':'sec'} sm" onclick="moePick(${i},'mine')">שלי</button>
+        <button class="btn ${(moeJob.picks[i]||'file')==='file'?'ok':'sec'} sm" onclick="moePick(${i},'file')">הקובץ</button></td>
+  </tr>`).join('')}
+  </tbody></table></div>
+  <div class="toolbar" style="margin-top:8px;">
+    <button class="btn sec sm" onclick="moePickAll('file')">הכול מהקובץ</button>
+    <button class="btn sec sm" onclick="moePickAll('mine')">הכול שלי</button>
+  </div>`:'<div class="note" style="margin-bottom:10px;">אין סתירות — הכול ייכנס ישירות.</div>'}
+  ${moeJob.skipped.length?`<details style="margin-top:8px;"><summary class="note" style="cursor:pointer;">${moeJob.skipped.length} שורות דולגו</summary>
+    <div class="note" style="max-height:120px; overflow:auto; margin-top:6px;">
+    ${moeJob.skipped.slice(0,40).map(s=>`שורה ${s.row} — ${esc(s.why)}`).join('<br>')}</div></details>`:''}
+  <div class="toolbar" style="margin-top:10px;">
+    <button class="btn ok" style="margin-inline-start:auto;" onclick="moeConfirm()">${ic('check',14)}אישור והחלה</button>
+  </div>`;
+}
+function moePick(i,which){ if(!moeJob) return; moeJob.picks[i]=which; moeRenderReview(); }
+function moePickAll(which){ if(!moeJob) return; moeJob.diff.forEach((x,i)=>{ if(x.state==='conflict') moeJob.picks[i]=which; }); moeRenderReview(); }
+function moeClose(){ const el=document.getElementById('cfModal'); if(el) el.classList.remove('show'); moeJob=null; }
+function moeConfirm(){
+  if(!moeJob) return;
+  pushUndo('ייבוא ציוני בגרות');
+  const r=moeApply(moeJob.diff,moeJob.picks);
+  save(); moeClose(); render();
+  toast(`נכנסו ${r.nG} ציונים · ${r.nC} סמלי שאלון`);
 }
 
 /* ---- דוח אבחון: הופך "לא עובד" לנתונים ---- */
