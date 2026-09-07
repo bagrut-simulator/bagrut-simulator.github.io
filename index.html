@@ -172,6 +172,16 @@ nav.tabs button.active{box-shadow:0 4px 14px rgba(79,70,229,.35), 0 0 0 3px rgba
 nav.tabs button.active .ic svg{stroke-width:2.4;}
 nav.tabs button:focus-visible{outline:2px solid var(--brand); outline-offset:2px;}
 nav.tabs button:hover:not(.active){background:var(--soft); color:var(--ink);}
+/* תפריט "עוד" של פס הטאבים */
+.tabsMoreWrap{position:relative; display:flex; align-items:center;}
+#tabsMore{display:none; position:absolute; inset-inline-end:0; top:calc(100% + 8px); background:#fff;
+  border:1px solid var(--line); border-radius:14px; box-shadow:0 20px 50px rgba(15,23,42,.28);
+  min-width:186px; padding:6px; z-index:600; animation:sheetUp .15s ease both;}
+#tabsMore.show{display:block;}
+#tabsMore .mi{display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:10px;
+  cursor:pointer; font-size:14px; font-weight:700; color:var(--ink); white-space:nowrap; min-height:44px;}
+#tabsMore .mi:hover,#tabsMore .mi:focus-visible{background:var(--soft); outline:none;}
+#tabsMore .mi.on{background:linear-gradient(135deg,var(--brand),var(--brand2)); color:#fff;}
 main{padding:20px; max-width:1500px; margin:0 auto;}
 .row{display:flex; gap:14px; flex-wrap:wrap;}
 .card{background:rgba(255,255,255,.86); -webkit-backdrop-filter:blur(14px) saturate(150%); backdrop-filter:blur(14px) saturate(150%); -webkit--webkit-backdrop-filter:blur(14px) saturate(150%); backdrop-filter:blur(14px) saturate(150%); border:1px solid rgba(255,255,255,.75); border-radius:20px; padding:17px; box-shadow:var(--sh); animation:fadeUp .3s ease both; transition:box-shadow .2s ease;}
@@ -357,6 +367,46 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
   header.app{padding-inline:10px; gap:7px;}
   .grid2,.grid3{grid-template-columns:1fr;}
 }
+/* ══ כיווץ הפסים העליונים בטלפון ══
+   נמדד באייפון: כותרת 71 + פס סימולטור 92 + פס גיבוי 87 + פס טאבים 68 = 318 פיקסל
+   של פסים לפני שמתחיל התוכן — והשורה הראשונה של הטבלה התחילה בפיקסל 618 מתוך 812,
+   כלומר שתי תלמידות מתוך שתים־עשרה. בלוק אחד שמחזיר את המסך לתוכן. */
+@media(max-width:700px){
+  header.app{padding:9px 12px; padding-top:calc(9px + env(safe-area-inset-top)); min-height:0; gap:8px;}
+  .glassIcon{width:36px; height:36px; border-radius:11px; animation:none;}   /* בלי ריחוף בטלפון */
+  .glassIcon svg{width:19px; height:19px;}
+  .glassIcon::before{display:none;}
+  .coordLine{display:none;}                     /* שם הרכזת מופיע בדוח ובהגדרות; בכותרת הוא רק גוזל שורה */
+  header.app::before{display:none;}             /* מוטיב הרקע לא נראה בכלל בגודל הזה */
+  /* פס הסימולטור: שורה אחת שנגללת לרוחב במקום שתי שורות שנשברות */
+  #subBar{flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    padding:5px 10px; gap:6px; scrollbar-width:none;}
+  #subBar::-webkit-scrollbar{display:none;}
+  #subBar>*{flex-shrink:0;}
+  #profileSlot{flex-wrap:nowrap;}
+  #saveInd{padding:3px 8px; font-size:11px;}
+  /* פס הגיבוי לא תופס 87 פיקסל בטלפון — הוא הופך לנקודה אדומה על כפתור התפריט */
+  #nagBar{display:none !important;}
+  /* חובה visible: overflow:auto חותך את תפריט "עוד" שנפתח מתחת לפס.
+     ומכיוון שאין יותר גלילה שתבלע את העודף — חמשת הכפתורים חייבים להיכנס
+     ברוחב המסך, אחרת כל העמוד מקבל גלילה אופקית. לכן הם מתכווצים. */
+  nav.tabs{padding:6px 8px; gap:3px; overflow:visible; max-width:100%;}
+  nav.tabs>button{flex:1 1 auto; min-width:0; justify-content:center;
+    padding:8px 6px; font-size:12.5px; min-height:40px; overflow:hidden; text-overflow:ellipsis;}
+  nav.tabs>button .ic{display:none;}                       /* מקום למילים */
+  nav.tabs>button.active .ic{display:inline-block; margin-inline-end:5px;}  /* האייקון מסמן איפה אנחנו */
+  .tabsMoreWrap{flex:0 0 auto;}
+  #tabsMoreBtn{padding:8px 10px; font-size:12.5px; min-height:40px;}
+  #tabsMore{inset-inline-end:8px;}
+}
+/* נקודה אדומה על כפתור התפריט כשצריך גיבוי — ההתראה נשארת, בלי לגזול שורה */
+#btnMenu{position:relative;}
+#btnMenu.needBk::after{content:''; position:absolute; top:-2px; inset-inline-end:-2px;
+  width:10px; height:10px; border-radius:99px; background:#dc2626;
+  border:2px solid rgba(255,255,255,.92); box-shadow:0 0 0 1px rgba(0,0,0,.12);}
+#btnMenu.needBk.soft::after{background:#f59e0b;}
+#hdrMenu .mi.bkNow{background:#fef2f2; color:#991b1b;}
+#hdrMenu .mi.bkNow.soft{background:#fffbeb; color:#92400e;}
 .alert-item{display:flex; gap:10px; align-items:center; padding:9px 13px; border-radius:11px; margin-bottom:7px; font-size:13px; transition:transform .12s ease;}
 .alert-item:hover{transform:translateX(-3px);}
 .al-bad{background:#fef2f2; border-right:4px solid var(--bad);}
@@ -1915,10 +1965,19 @@ function saveProfileState(pid,st){
 function saveProfiles(){ LS.setItem('bagrutProfiles',JSON.stringify(profiles)); LS.setItem('bagrutCurrentProfile',currentProfileId); }
 function renderProfileBar(){
   const s=document.getElementById('profileSlot'); if(!s) return;
-  s.innerHTML=`<label style="color:var(--muted); font-size:11.5px; font-weight:700;">סימולטור:</label>
-  <select onchange="switchProfile(this.value)" style="border-radius:9px; padding:4px 8px; font-weight:700; max-width:170px; font-size:12.5px;">
+  const sel=`<select onchange="switchProfile(this.value)" style="border-radius:9px; padding:4px 8px; font-weight:700; max-width:170px; font-size:12.5px;">
     ${profiles.map(p=>`<option value="${p.id}" ${p.id===currentProfileId?'selected':''}>${esc(p.name||'(ללא שם)')}</option>`).join('')}
-  </select>
+  </select>`;
+  /* ── בטלפון ──
+     הפס הזה היה 618 פיקסל בחלון של 375, ולכן כפתורים נחתכו באמצע ונראו שבורים.
+     "שינוי שם" ו"סימולטור חדש" הן פעולות נדירות — מקומן בתפריט, לא בפס קבוע.
+     ובבית ספר עם סימולטור אחד, הבורר עצמו הוא רעש: אין בין מה לבחור. */
+  if(tabsCompact()){
+    s.innerHTML=(profiles.length>1?sel:'');
+    return;
+  }
+  s.innerHTML=`<label style="color:var(--muted); font-size:11.5px; font-weight:700;">סימולטור:</label>
+  ${sel}
   <button class="btn sm" style="background:rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.4);" onclick="renameProfile()" title="שינוי שם הסימולטור">✏️</button>
   <button class="btn sm" style="background:rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.4);" onclick="newProfile()" title="יצירת סימולטור נפרד לשנתון או כיתה נוספת">➕ חדש</button>`;
 }
@@ -2078,22 +2137,40 @@ function nagSnoozed(){
 function nagSnooze(){
   try{ LS.setItem('bagrutNagSnooze',new Date().toDateString()); }catch(e){}
   const el=document.getElementById('nagBar'); if(el) el.style.display='none';
+  nagDot();
 }
-function renderNag(){
-  const el=document.getElementById('nagBar'); if(!el) return;
+/* מקור אמת אחד למצב הגיבוי. הפס העליון והנקודה על כפתור התפריט קוראים ממנו שניהם,
+   כדי שלא ייווצר מצב שהפס אומר דבר אחד והנקודה דבר אחר.
+   מחזיר null (הכול טוב) · 'hard' (אין גיבוי בכלל) · 'soft' (יש עותק בדרייב, כדאי גם קובץ) */
+function nagState(){
   const n=countAllStudents();
-  if(!n){ el.style.display='none'; return; }
-  if(fileState==='on'){ el.style.display='none'; return; }   // מחובר לקובץ — נשמר אוטומטית
-  if(nagSnoozed()){ el.style.display='none'; return; }       // נדחה להיום
+  if(!n) return null;
+  if(fileState==='on') return null;                          // מחובר לקובץ — נשמר אוטומטית
   const b=lastBackupInfo();
   const today=new Date().toDateString();
   const backedUpToday=b&&new Date(b.at).toDateString()===today;
   const diff=b?n-(b.n||0):n;
-  if(backedUpToday&&diff===0){ el.style.display='none'; return; }
-  // מחוברים לדרייב: יש עותק בענן, ולכן מזכירים פעם בשבוע ובנימה רכה
+  if(backedUpToday&&diff===0) return null;
   const synced=(typeof dv!=='undefined')&&dv.on&&dv.state==='synced';
   const days=b?Math.floor((Date.now()-new Date(b.at).getTime())/86400000):999;
-  if(synced&&days<7){ el.style.display='none'; return; }
+  if(synced&&days<7) return null;
+  return {kind:synced?'soft':'hard',b,backedUpToday,diff,synced};
+}
+/* הנקודה נשארת גם אחרי "לא היום" — הדחייה מסלקת את הפס הרועש, לא את הידיעה */
+function nagDot(){
+  const btn=document.getElementById('btnMenu'); if(!btn) return;
+  const st=nagState();
+  btn.classList.toggle('needBk',!!st);
+  btn.classList.toggle('soft',!!st&&st.kind==='soft');
+  if(st) btn.title=st.kind==='hard'?'לא נעשה גיבוי — קבצים ופעולות':'כדאי גיבוי לקובץ — קבצים ופעולות';
+  else btn.title='קבצים ופעולות';
+}
+function renderNag(){
+  const el=document.getElementById('nagBar'); if(!el) return;
+  nagDot();
+  const st=nagState();
+  if(!st||nagSnoozed()){ el.style.display='none'; return; }   // נדחה להיום
+  const {b,backedUpToday,diff,synced}=st;
   el.className=synced?'nagSoft':'';
   const txt = synced
     ? `<b>🔔 כדאי גיבוי לקובץ</b> — הנתונים מסונכרנים בדרייב, אבל קובץ אצלך הוא ההעתק היחיד שלא תלוי בחשבון הגוגל.${b?` הגיבוי האחרון: ${new Date(b.at).toLocaleDateString('he-IL')}.`:''}`
@@ -2115,6 +2192,8 @@ function renderSaveInd(){
   const n=state.students.length;
   const t=lastSaveAt?lastSaveAt.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}):'—';
   if(saveOk===false){ el.style.background='#fee2e2'; el.style.color='#991b1b'; el.innerHTML='⚠️ השמירה נכשלה — לחצי כאן'; return; }
+  // בטלפון: רק השעה. מספר התלמידות מופיע בכל מקרה בכותרת של כל מסך.
+  if(tabsCompact()){ el.style.background=''; el.style.color=''; el.innerHTML=`✓ ${t}`; return; }
   el.innerHTML=`✓ נשמר ${t} · ${n} תלמידות`;
 }
 function uid(){ return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -3360,6 +3439,13 @@ function renderHdrBtns(){
   const m=document.getElementById('btnMenu');
   if(m) m.innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="hide-sm">תפריט</span>`;
   const el=document.getElementById('hdrMenu'); if(!el) return;
+  nagDot();
+  // בטלפון פס הגיבוי מוסתר, ולכן ההתראה עצמה חייבת לחכות כאן — לא רק נקודה, גם מילים
+  const _nag=(typeof nagState==='function')?nagState():null;
+  const nagCls=_nag?(' bkNow'+(_nag.kind==='soft'?' soft':'')):'';
+  const nagHint=_nag
+    ? `<span class="pill" style="margin-inline-start:auto; font-size:10.5px; background:${_nag.kind==='soft'?'#fef3c7':'#fee2e2'}; border-color:transparent;">${_nag.kind==='soft'?'כדאי':'נדרש'}</span>`
+    : '';
   const fileItems = !FS_OK
     ? `<div class="mi" style="opacity:.55; cursor:default;">${ic('save',17)}שמירה אוטומטית לא נתמכת בדפדפן זה</div>`
     : (fileState==='on'
@@ -3367,12 +3453,20 @@ function renderHdrBtns(){
          <div class="mi" onclick="hideMenu();fileDisconnect()" style="color:var(--bad);">${ic('trash',17)}ניתוק מהקובץ</div>`
       : `<div class="mi" onclick="hideMenu();fileConnectNew()">${ic('save',17)}חיבור קובץ נתונים (שמירה אוטומטית)</div>
          <div class="mi" onclick="hideMenu();fileConnectOpen()">${ic('folder',17)}פתיחת קובץ נתונים קיים</div>`);
+  // בטלפון ✏️ ו-➕ יורדו מהפס העליון כדי שלא ייחתכו — ולכן הם חייבים להיות כאן
+  const profItems = tabsCompact()
+    ? `<div class="lbl">הסימולטור</div>
+       <div class="mi" onclick="hideMenu();renameProfile()">${ic('pen',17)}שינוי שם הסימולטור</div>
+       <div class="mi" onclick="hideMenu();newProfile()">${ic('plus',17)}סימולטור חדש (שנתון או כיתה)</div>
+       <div class="sep"></div>`
+    : '';
   el.innerHTML=`
+    ${profItems}
     <div class="lbl">קובץ הנתונים</div>
     ${fileItems}
     <div class="sep"></div>
     <div class="lbl">גיבוי</div>
-    <div class="mi" onclick="hideMenu();exportJSON()">${ic('down',17)}גיבוי לקובץ</div>
+    <div class="mi${nagCls}" onclick="hideMenu();exportJSON()">${ic('down',17)}גיבוי לקובץ${nagHint}</div>
     <div class="mi" onclick="hideMenu();document.getElementById('jsonFile').click()">${ic('up',17)}שחזור מגיבוי</div>
     <div class="sep"></div>
     <div class="lbl">אקסל</div>
@@ -3391,11 +3485,58 @@ function toggleMenu(e){
 }
 function hideMenu(){ const el=document.getElementById('hdrMenu'); if(el) el.classList.remove('show'); }
 document.addEventListener('click',()=>hideMenu());
+/* ── פס הטאבים בטלפון ──
+   שמונה טאבים הם 692 פיקסל בחלון של 375: ארבעה מהם היו מחוץ למסך, מאחורי
+   גלילה אופקית שאין לה שום סימן — כלומר חצי מהתוכנה הייתה מוסתרת בפועל.
+   בטלפון: ארבעה טאבים גלויים + תפריט "עוד". שום דבר לא דורש ניחוש. */
+const TABS_PRIMARY=['dash','students','entry','sim'];
+/* "הזנת ציונים" הוא 100 פיקסל — יותר מכל תווית אחרת, וברוחב 375 הוא זה שמפיל את השורה */
+const TABS_SHORT={entry:'הזנה'};
+function tabsCompact(){ return window.innerWidth<=700; }
 function renderTabs(){
   const n=document.getElementById('tabs'); if(!n) return;
-  n.innerHTML=TABS.map(([id,label,icon])=>
-    `<button data-tab="${id}" class="${currentTab===id?'active':''}" onclick="setTab('${id}')">${ic(icon)}${label}</button>`).join('');
+  const cmp=tabsCompact();
+  const btn=([id,label,icon])=>
+    `<button data-tab="${id}" class="${currentTab===id?'active':''}" onclick="setTab('${id}')" title="${esc(label)}">${ic(icon)}${esc((cmp&&TABS_SHORT[id])||label)}</button>`;
+  if(!cmp){ n.innerHTML=TABS.map(btn).join(''); return; }
+  const prim=TABS.filter(t=>TABS_PRIMARY.indexOf(t[0])>-1);
+  const rest=TABS.filter(t=>TABS_PRIMARY.indexOf(t[0])<0);
+  // אם המסך הפעיל יושב בתוך "עוד" — הכפתור מציג את שמו, כדי שתמיד יהיה ברור איפה אנחנו
+  const cur=rest.filter(t=>t[0]===currentTab)[0];
+  n.innerHTML=prim.map(btn).join('')+
+    `<div class="tabsMoreWrap">
+       <button id="tabsMoreBtn" class="${cur?'active':''}" aria-haspopup="true" aria-expanded="false"
+         onclick="toggleTabsMore(event)" title="מסכים נוספים">${cur?ic(cur[2])+esc(cur[1]):ic('dots')+'עוד'}</button>
+       <div id="tabsMore" role="menu">${rest.map(([id,label,icon])=>
+         `<div class="mi${currentTab===id?' on':''}" role="menuitem" tabindex="0"
+            onclick="tabsMorePick('${id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();tabsMorePick('${id}');}">${ic(icon)}${esc(label)}</div>`).join('')}</div>
+     </div>`;
 }
+function closeTabsMore(){
+  const m=document.getElementById('tabsMore'); if(m) m.classList.remove('show');
+  const b=document.getElementById('tabsMoreBtn'); if(b) b.setAttribute('aria-expanded','false');
+}
+function toggleTabsMore(e){
+  if(e) e.stopPropagation();
+  const m=document.getElementById('tabsMore'); if(!m) return;
+  const willShow=!m.classList.contains('show');
+  hideMenu();                                        // לא שני תפריטים פתוחים בבת אחת
+  m.classList.toggle('show',willShow);
+  const b=document.getElementById('tabsMoreBtn'); if(b) b.setAttribute('aria-expanded',willShow?'true':'false');
+}
+function tabsMorePick(id){ closeTabsMore(); setTab(id); }
+document.addEventListener('click',function(e){
+  const w=e.target&&e.target.closest?e.target.closest('.tabsMoreWrap'):null;
+  if(!w) closeTabsMore();
+});
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeTabsMore(); });
+/* מסתובב לרוחב, או עובר בין חלון צר לרחב — הפס נבנה מחדש בצורה המתאימה */
+let _tabsW=window.innerWidth;
+window.addEventListener('resize',function(){
+  const was=_tabsW<=700, now=window.innerWidth<=700;
+  _tabsW=window.innerWidth;
+  if(was!==now){ closeTabsMore(); renderTabs(); renderProfileBar(); renderSaveInd(); }
+});
 
 /* ============ ניווט ============ */
 let currentTab='dash', charts={};
@@ -6792,7 +6933,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='13.6';
+const APP_VERSION='13.7';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
