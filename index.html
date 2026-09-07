@@ -1967,13 +1967,67 @@ let state=loadState();
 /* Object.assign הוא שטוח: אובייקט מקונן מגיבוי ישן דורס את ברירת המחדל כולה,
    וכל מפתח שחסר בו הופך ל-undefined על המסך. לכן ממזגים גם רמה שנייה. */
 const NESTED_DEFAULTS=['thresholds'];
+/* ── חיטוי מספרים בשער הכניסה ──
+   מסך ההזנה מגן על עצמו (numOr), אבל נתונים נכנסים גם מקובץ גיבוי שנערך ביד,
+   מקובץ שנקטע באמצע, ומדרייב. מספר שאינו סופי או מחוץ לתחום מחלחל משם ישר
+   לחישוב הזכאות ומוציא ממוצע חסר-משמעות. הפונקציה הזו היא הברז היחיד שכולם עוברים בו. */
+function clampNum(v,lo,hi){
+  if(v===''||v===null||v===undefined) return null;
+  const n=+v;
+  if(!Number.isFinite(n)||n<lo||n>hi) return null;
+  return n;
+}
+function sanitizeState(out){
+  if(!out||typeof out!=='object') return out;
+  // גיבוי שנקטע או נערך ביד יכול להגיע עם students שאינו מערך. כל המסכים מניחים מערך.
+  if(!Array.isArray(out.students)) out.students=[];
+  if(!Array.isArray(out.classes)) out.classes=[];
+  if(!out.custom||typeof out.custom!=='object'||Array.isArray(out.custom)) out.custom={};
+  out.students=out.students.filter(st=>st&&typeof st==='object');
+  out.students.forEach(st=>{
+    ['grades','simg'].forEach(f=>{
+      const o=st[f]; if(!o||typeof o!=='object') { if(o!==undefined) st[f]={}; return; }
+      Object.keys(o).forEach(k=>{ const n=clampNum(o[k],0,100); if(n===null) delete o[k]; else o[k]=n; });
+    });
+    if(st.units&&typeof st.units==='object')
+      Object.keys(st.units).forEach(k=>{ const n=clampNum(st.units[k],0,15); if(n===null) delete st.units[k]; else st.units[k]=Math.round(n); });
+    if(st.ov&&typeof st.ov==='object')
+      Object.keys(st.ov).forEach(k=>{ const p=st.ov[k];
+        if(!p||typeof p!=='object'){ delete st.ov[k]; return; }
+        ['w','s'].forEach(f=>{ if(p[f]===undefined||p[f]==='') return;
+          const n=clampNum(p[f],0,100); if(n===null) delete p[f]; else p[f]=n; });
+        if(!Object.keys(p).length) delete st.ov[k]; });
+    // ל-tests יש שתי צורות חוקיות: מספר בודד (הזנה מהירה בטבלה) או מערך מבחנים (חלון הניהול).
+    if(st.tests&&typeof st.tests==='object'&&!Array.isArray(st.tests))
+      Object.keys(st.tests).forEach(sid=>{ const a=st.tests[sid];
+        if(!Array.isArray(a)){                                   // צורת המספר הבודד
+          const n=clampNum(a,0,100);
+          if(n===null) delete st.tests[sid]; else st.tests[sid]=n;
+          return;
+        }
+        const clean=a.map(x=>{
+          if(typeof x==='number'||typeof x==='string'){ const n=clampNum(x,0,100); return n===null?null:n; }
+          if(!x||typeof x!=='object') return null;
+          const gg=clampNum(x.g,0,100); if(gg===null) return null;
+          const ww=clampNum(x.w,0,100);
+          return Object.assign({},x,{g:gg,w:ww===null?1:ww});
+        }).filter(x=>x!==null);
+        if(clean.length) st.tests[sid]=clean; else delete st.tests[sid]; });
+    else if(st.tests!==undefined&&(typeof st.tests!=='object'||Array.isArray(st.tests))) st.tests={};
+  });
+  return out;
+}
 function withDefaults(s){
   const base=JSON.parse(JSON.stringify(DEFAULT_STATE));
   const out=Object.assign(base,s||{});
   NESTED_DEFAULTS.forEach(k=>{
     out[k]=Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE[k])), (s&&typeof s[k]==='object'&&s[k])||{});
   });
-  return out;
+  Object.keys(out.thresholds).forEach(k=>{
+    const d=DEFAULT_STATE.thresholds[k], n=clampNum(out.thresholds[k],0,100);
+    if(n===null) out.thresholds[k]=d;
+  });
+  return sanitizeState(out);
 }
 function loadState(){
   try{const raw=LS.getItem(profileKey()); if(raw) return withDefaults(JSON.parse(raw));}catch(e){}
@@ -2713,9 +2767,11 @@ function normTests(t){
 }
 function testsOf(st,sid){ return normTests((st.tests||{})[sid]); }
 function testAvg(st,sid){
-  const a=testsOf(st,sid); if(!a.length) return null;
-  const W=a.reduce((s,x)=>s+x.w,0)||1;
-  return Math.round(a.reduce((s,x)=>s+x.g*x.w,0)/W*10)/10;
+  const a=testsOf(st,sid).filter(x=>x&&Number.isFinite(+x.g)&&Number.isFinite(+x.w));
+  if(!a.length) return null;
+  const W=a.reduce((s,x)=>s+(+x.w),0)||1;
+  const v=Math.round(a.reduce((s,x)=>s+(+x.g)*(+x.w),0)/W*10)/10;
+  return Number.isFinite(v)?Math.max(0,Math.min(100,v)):null;
 }
 function saveTests(st,sid,arr){
   st.tests=st.tests||{};
@@ -2837,8 +2893,9 @@ function getCompsFor(st,subj,u){
     const po=stOv[subj.id+'.'+i];
     if(!po) return c;
     const merged=Object.assign({},c);
-    if(po.w!==undefined&&po.w!==null&&po.w!=='') merged.w=+po.w;
-    if(po.s!==undefined&&po.s!==null&&po.s!=='') merged.s=+po.s;
+    // התאמה אישית שנפגמה בקובץ לא תהפוך את המשקל ל-NaN ותאפס מקצוע שלם
+    if(po.w!==undefined&&po.w!==null&&po.w!==''&&Number.isFinite(+po.w)&&+po.w>=0&&+po.w<=100) merged.w=+po.w;
+    if(po.s!==undefined&&po.s!==null&&po.s!==''&&Number.isFinite(+po.s)&&+po.s>=0&&+po.s<=100) merged.s=+po.s;
     merged._custom=true;
     return merged;
   });
@@ -2847,7 +2904,10 @@ function hasOverrides(st,subj){
   const stOv=st.ov||{};
   return Object.keys(stOv).some(k=>k.startsWith(subj.id+'.')&&stOv[k]&&Object.keys(stOv[k]).length);
 }
-function num(v){ if(v===''||v===null||v===undefined) return null; const n=+v; return isNaN(n)?null:n; }
+function num(v){ if(v===''||v===null||v===undefined) return null; const n=+v; return Number.isFinite(n)?n:null; }
+/* קורא ציון: כל מה שאינו מספר סופי בתחום 0–100 נחשב "לא הוזן". הגנה אחרונה
+   על מנוע החישוב, מעל החיטוי שבשער הכניסה — כדי ששום נתיב לא יעקוף את שניהם. */
+function gnum(v){ const n=num(v); return (n===null||n<0||n>100)?null:n; }
 // opts: {split: אחוז מגן גלובלי או null, predict:bool, bonus:number}
 function calcSubject(st,subj,opts){
   opts=opts||{};
@@ -2863,10 +2923,10 @@ function calcSubject(st,subj,opts){
     let val=null;
     const skipBlue=k=>(state.countBlue===false&&gstatOf(st,k)==='b');   // כחול = פיקטיבי
     if(c.t==='i'){
-      val=skipBlue(key)?null:num(g[key]);
+      val=skipBlue(key)?null:gnum(g[key]);
       if(val===null) missing++;
     }else{
-      let m=skipBlue(key+'.m')?null:num(g[key+'.m']), e=skipBlue(key+'.e')?null:num(g[key+'.e']);
+      let m=skipBlue(key+'.m')?null:gnum(g[key+'.m']), e=skipBlue(key+'.e')?null:gnum(g[key+'.e']);
       if(opts.predict && e===null){
         const tv=testAvg(st,subj.id);
         if(tv!==null){ e=tv; predictedUsed=true; }                       // ציון מבחן כיתתי — האינדיקטור הטוב ביותר
@@ -3094,6 +3154,7 @@ const ICONS={
  // --- הרחבת שפת האייקונים (rounded outline, stroke 2, 24x24) ---
  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
  filter:'<path d="M4 5h16"/><path d="M7 12h10"/><path d="M10 19h4"/>',
+ dots:'<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
  sortDesc:'<path d="M6 4v16"/><path d="M3 17l3 3 3-3"/><path d="M13 6h8"/><path d="M13 11h6"/><path d="M13 16h4"/>',
  check:'<path d="M4 12.5l5 5L20 6.5"/>',
  x:'<path d="M6 6l12 12"/><path d="M18 6L6 18"/>',
@@ -6731,7 +6792,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='13.5';
+const APP_VERSION='13.6';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -7155,11 +7216,13 @@ function mergeStates(mine,theirs,base){
     });
     MRG_FLD.forEach(fld=>{                       // מקור אמת אחד לרשימת השדות — לא רשימה שנייה שתיפרד
       const mm=m[fld]||{}, tt=t[fld]||{}, bb=b[fld]||{};
-      t[fld]=t[fld]||{};
+      // לא יוצרים את השדה סתם: {} ריק שנוסף בכל מיזוג משנה את חתימת החבילה,
+      // והמכשיר חושב שיש שינוי להעלות כשבפועל שום נתון לא זז.
+      const ensure=()=>(t[fld]||(t[fld]={}));
       Object.keys(mm).forEach(k=>{
         const a=mm[k], c=tt[k], z=bb[k];
         if(JSON.stringify(a)===JSON.stringify(c)) return;               // זהה
-        if(JSON.stringify(c)===JSON.stringify(z)) { t[fld][k]=a; return; } // רק אני שיניתי
+        if(JSON.stringify(c)===JSON.stringify(z)) { ensure()[k]=a; return; } // רק אני שיניתי
         if(JSON.stringify(a)===JSON.stringify(z)) return;                  // רק הם שינו
         clash.push({id,name:m.name,fld,key:k,mine:a,theirs:c});            // שניים שינו
       });
