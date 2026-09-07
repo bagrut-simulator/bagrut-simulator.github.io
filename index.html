@@ -390,7 +390,14 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
   /* חובה visible: overflow:auto חותך את תפריט "עוד" שנפתח מתחת לפס.
      ומכיוון שאין יותר גלילה שתבלע את העודף — חמשת הכפתורים חייבים להיכנס
      ברוחב המסך, אחרת כל העמוד מקבל גלילה אופקית. לכן הם מתכווצים. */
-  nav.tabs{padding:6px 8px; gap:3px; overflow:visible; max-width:100%;}
+  /* בצילום של מסך הסימולציה פס הטאבים הדביק נכנס מתחת לשעון של iOS: כשהכותרת
+     נגללה, sticky top:0 עצר בקצה החלון — שבמצב "הוסף למסך הבית" נמצא מתחת
+     לשורת המצב. עוצר עכשיו מתחתיה, וה-::before צובע את הרצועה שמעל. */
+  nav.tabs{padding:6px 8px; gap:3px; overflow:visible; max-width:100%;
+    top:env(safe-area-inset-top,0px);}
+  nav.tabs::before{content:''; position:absolute; inset-inline:0;
+    top:calc(-1 * env(safe-area-inset-top,0px)); height:env(safe-area-inset-top,0px);
+    background:rgba(255,255,255,.92); -webkit-backdrop-filter:blur(22px); backdrop-filter:blur(22px);}
   nav.tabs>button{flex:1 1 auto; min-width:0; justify-content:center;
     padding:8px 6px; font-size:12.5px; min-height:40px; overflow:hidden; text-overflow:ellipsis;}
   nav.tabs>button .ic{display:none;}                       /* מקום למילים */
@@ -398,7 +405,61 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
   .tabsMoreWrap{flex:0 0 auto;}
   #tabsMoreBtn{padding:8px 10px; font-size:12.5px; min-height:40px;}
   #tabsMore{inset-inline-end:8px;}
+  /* ── צפיפות בטבלת הציונים ──
+     כל תא נשא: תג שאלון + "סמל +" + "מגן 40%" + "בחינה 60%" + "משוקלל 84".
+     נשארים המספרים, המשוקלל, והמילים "מגן"/"בחינה" — שבלעדיהן אי אפשר לדעת
+     איזה שדה הוא איזה. יורדים: האחוזים החוזרים על עצמם וכפתור הסמל.
+     הכול נשאר במלואו בכרטיס התלמידה, בכותרת העמודה ובמחשב. */
+  .pct{display:none;}
+  .pct.keep{display:inline;}            /* חלוקה חריגה — לא נעלמת בשקט */
+  button.rowCode{display:none;}         /* הסמל מופיע בכותרת העמודה */
+  .eBox .gcell small{font-size:10px;}
+  .eAvg{font-size:10.5px; margin-top:3px; padding-top:3px;}
+  /* ── כותרת המסך: שורה אחת ── */
+  .hero.heroLite,.simHero.heroLite{padding:0 4px 8px; margin-bottom:6px; gap:8px;
+    background:none !important; border:0 !important; box-shadow:none !important;
+    min-height:0; flex-wrap:nowrap; align-items:baseline;}
+  .hero.heroLite::before,.hero.heroLite::after,
+  .simHero.heroLite::before,.simHero.heroLite::after{display:none !important;}
+  .heroLite .hIco,.heroLite .simIco,.heroLite .hArt{display:none;}
+  .heroLite .hTxt{display:flex; align-items:baseline; gap:7px; flex-wrap:wrap; min-width:0;}
+  .heroLite h1.hT{font-size:17px;}
+  .heroLite .hS{margin-top:0; font-size:11.5px; opacity:.85;}
+  /* ── מסך הסימולציה: ~450 פיקסל של הסבר לפני הטבלה ──
+     ההבטחה החשובה ("לא נכתבים לטבלת הציונים") נשארת. הפירוט שלה, ותרשים
+     שלוש הקופסאות, יורדים — המידע שבהם חוזר בשורה אחת ב-.simMob. */
+  .simVowMore{display:none;}
+  .simVow{padding:9px 12px; font-size:12px;}
+  .triState{display:none !important;}
+  .simMob{display:flex !important;}
+  /* ── המדריך: רשימת שאלות, ולחיצה פותחת תשובה ── */
+  .helpJump{display:none;}              /* כרטיסי הקיצור כופלים את רשימת השאלות */
+  .hCard{margin-bottom:5px;}
+  .hHead .hT{font-size:13.5px; line-height:1.35;}
+  /* קווי ההפרדה בסרגל מאבדים משמעות כשהקבוצות שלצידם ירדו לתחתית */
+  .eBar .eSep{display:none;}
+  .eBar{padding-inline:9px;}
 }
+/* הכפתורים שיורדים לתחתית מקבלים רשת של שתיים, כמו כפתורי הכותרת */
+.mobTail .eGrp{display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:8px;}
+.mobTail .eGrp .btn{width:100%; justify-content:center;}
+.simMob{display:none; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px;
+  padding:7px 11px; background:rgba(255,255,255,.72); border:1px solid var(--line); border-radius:12px;}
+.simMob .smImp{font-size:12px; font-weight:700; color:var(--muted);}
+.simMob .btn{margin-inline-start:auto;}
+/* ── אזור "פעולות וניהול" בתחתית המסך (טלפון בלבד) ── */
+.mobTail{margin-top:14px;}
+.mobTail .mtHead{width:100%; display:flex; align-items:center; gap:8px; font-family:inherit;
+  font-size:13.5px; font-weight:800; color:var(--muted); background:rgba(255,255,255,.7);
+  border:1px dashed var(--line); border-radius:13px; padding:11px 14px; cursor:pointer; min-height:44px;}
+.mobTail .mtHead .mtCar{font-size:12px;}
+.mobTail .mtHead:hover{color:var(--ink); border-color:var(--brand);}
+.mobTail .mtBody{display:none; padding-top:10px;}
+.mobTail.open .mtBody{display:block;}
+.mobTail.open .mtHead{color:var(--ink); border-style:solid;}
+.mobTail .hAct{display:grid !important; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:10px;}
+.mobTail .hAct .btn{width:100%; justify-content:center;}
+.mobTail .hAct .simCnt{grid-column:1/-1; justify-content:center;}
 /* נקודה אדומה על כפתור התפריט כשצריך גיבוי — ההתראה נשארת, בלי לגזול שורה */
 #btnMenu{position:relative;}
 #btnMenu.needBk::after{content:''; position:absolute; top:-2px; inset-inline-end:-2px;
@@ -3606,7 +3667,45 @@ function render(){
     try{ m.innerHTML=tabErrHtml(currentTab,err); }catch(e2){ m.innerHTML='<div class="card">שגיאה בהצגת המסך.</div>'; }
     try{ console.error('render('+currentTab+')',err); }catch(e3){}
   }
+  try{ mobileReflow(m); }catch(e){}
   try{ renderSaveInd(); renderNag(); renderHeaderCenter(); renderUndoAll(); renderLic(); renderSyncInd(); animateCounters(); }catch(e){}
+}
+/* ══ סידור מחדש לטלפון ══
+   בטלפון כרטיס הכותרת של כל מסך תפס ~105 פיקסל (אייקון · שם · תיאור · 2–4 כפתורים),
+   ולפני הרשימה במסך תלמידות ישבו עוד שני כרטיסי ניהול. הנתונים הגיעו רק שלישיים.
+   כאן: הכותרת מצטמצמת לשורה, והפעולות וכרטיסי הניהול יורדים לתחתית המסך
+   לתוך אזור מתקפל. מיושם על ה-DOM אחרי הרינדור — כך שאין צורך לפצל
+   שש פונקציות רינדור לשתי גרסאות, ובמחשב שום דבר לא משתנה. */
+let mobTailOpen=false;
+function toggleMobTail(){
+  mobTailOpen=!mobTailOpen;
+  const w=document.getElementById('mobTail'); if(!w) return;
+  w.classList.toggle('open',mobTailOpen);
+  const b=w.querySelector('.mtHead');
+  if(b){ b.setAttribute('aria-expanded',mobTailOpen?'true':'false');
+    const car=b.querySelector('.mtCar'); if(car) car.textContent=mobTailOpen?'▴':'▾'; }
+}
+function mobileReflow(m){
+  m=m||document.getElementById('main'); if(!m) return;
+  if(!tabsCompact()) return;                       // במחשב לא נוגעים בכלום
+  const hero=m.querySelector('.hero, .simHero');
+  const tailItems=[];
+  if(hero){
+    hero.classList.add('heroLite');
+    const act=hero.querySelector('.hAct');
+    if(act&&act.children.length) tailItems.push(act);
+  }
+  m.querySelectorAll('[data-tail]').forEach(el=>tailItems.push(el));
+  if(!tailItems.length) return;
+  const wrap=document.createElement('div');
+  wrap.id='mobTail';
+  wrap.className='mobTail'+(mobTailOpen?' open':'');
+  wrap.innerHTML=`<button class="mtHead" onclick="toggleMobTail()" aria-expanded="${mobTailOpen?'true':'false'}">
+      <span class="mtCar">${mobTailOpen?'▴':'▾'}</span> פעולות וניהול</button>
+    <div class="mtBody"></div>`;
+  const body=wrap.querySelector('.mtBody');
+  tailItems.forEach(el=>body.appendChild(el));     // appendChild מעביר, לא משכפל
+  m.appendChild(wrap);
 }
 function classFilterHtml(id,val){
   return `<select id="${id}" onchange="renderKeepScroll()"><option value="">כל השכבה</option>${state.classes.map(c=>`<option ${val===c?'selected':''}>${c}</option>`).join('')}</select>`;
@@ -3847,7 +3946,9 @@ function renderStudents(m){
         :'ניהול שמות, כיתות וכרטיסי תלמידה',
     [`<button class="btn sm" onclick="document.getElementById('xlsxFile').click()">${ic('up',14)}ייבוא מאקסל</button>`,
      `<button class="btn sec sm" onclick="setTab('entry')">${ic('pen',14)}הזנת ציונים</button>`],'education')}
-  <div class="grid2">
+  <!-- כשיש תלמידות, הרשימה קודמת לכרטיסי הניהול (בטלפון הם יורדים לתחתית).
+       כשאין — "הוספת תלמידה" הוא בדיוק מה שצריך לראות ראשון, ולכן נשאר למעלה. -->
+  <div class="grid2"${nAll?' data-tail="1"':''}>
     <div class="card actCard">
       ${secHead('plus','הוספת תלמידה','שם אחד, או הדבקת רשימה שלמה')}
       ${state.classes.length?'':'<div class="alert-item al-info" style="margin-bottom:8px;">👈 שלב ראשון: צרי כיתה בחלונית "ניהול כיתות", ואז אפשר להוסיף תלמידות.</div>'}
@@ -4295,13 +4396,15 @@ function renderEntry(m){
       <select onchange="entryClass=this.value;renderKeepScroll()"><option value="">כל השכבה</option>${state.classes.map(c=>`<option ${entryClass===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
     </span>
     <span class="eSep"></span>
-    <span class="eGrp">
+    <!-- בטלפון הסרגל הזה הוא 679 פיקסל בחלון של 368. שני בוררי המקצוע והכיתה
+         נשארים; שאר הכפתורים יורדים ל"פעולות וניהול" בתחתית המסך. -->
+    <span class="eGrp" data-tail="1">
       <button class="btn ok sm" onclick="openGradeImport()">${ic('up',13)}ייבוא</button>
       <button class="btn sec sm ${openBoxes.paint?'on':''}" onclick="toggleBox('paint')">${ic('palette',13)}צביעה גורפת</button>
       <button class="btn sec sm ${openBoxes.lg?'on':''}" onclick="toggleBox('lg')">${ic('info',13)}מקרא</button>
     </span>
     <span class="eSep"></span>
-    <span class="eGrp">
+    <span class="eGrp" data-tail="1">
       <button class="btn sec sm" onclick="entryDense=!entryDense;renderKeepScroll()" title="${entryDense?'שורות רגילות':'תצוגה צפופה'}">${ic(entryDense?'expand':'layers',13)}${entryDense?'רגיל':'צפוף'}</button>
       <button class="btn ${entryFull?'warn':'sec'} sm" onclick="toggleEntryFull()" title="${entryFull?'יציאה ממסך מלא':'מסך מלא'}">${ic('expand',13)}${entryFull?'יציאה':'מסך מלא'}</button>
     </span>
@@ -4658,9 +4761,13 @@ function entryGrid(subj,studs){
         tds+=`<td class="${nt?'hasNote':''}"><div class="eWrap">${codeTag}${noteBtn(st,key,subj.name+' · '+(c.n||''))}${nt?noteChip(st.id,key):''}<div class="eBox one"><div class="gcell"><small>&nbsp;</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}" class="${kc(key)}" ${ct(key)} value="${g[key]??''}" onchange="setGrade('${st.id}','${key}',this.value)">${dot(key)}</div></div></div></td>`;
       }else{
         const eff=c.s;
-        const eSplit=(r.flips||[]).some(f=>f.comp===c.n)?(100-eff):eff;   // אם היה היפוך — מציגים את החלוקה שבפועל
-        const rM=eff>0?`<div class="gcell"><small>מגן ${eSplit}%</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}.m" class="${kc(key+'.m')}" ${ct(key+'.m')} value="${g[key+'.m']??''}" onchange="setGrade('${st.id}','${key}.m',this.value)">${dot(key+'.m')}</div>`:'';
-        const rE=eff<100?`<div class="gcell"><small>בחינה ${100-eSplit}%</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}.e" class="${kc(key+'.e')}" ${ct(key+'.e')} value="${g[key+'.e']??''}" onchange="setGrade('${st.id}','${key}.e',this.value)">${dot(key+'.e')}</div>`:'';
+        const flipped=(r.flips||[]).some(f=>f.comp===c.n);
+        const eSplit=flipped?(100-eff):eff;   // אם היה היפוך — מציגים את החלוקה שבפועל
+        // בטלפון האחוזים מוסתרים — הם חוזרים על עצמם בכל שורה. אבל שורה עם חלוקה
+        // חריגה (התאמה אישית או היפוך) שומרת אותם, כדי ששינוי לא ייעלם בשקט.
+        const pc=(c._custom||flipped)?'pct keep':'pct';
+        const rM=eff>0?`<div class="gcell"><small>מגן <span class="${pc}">${eSplit}%</span></small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}.m" class="${kc(key+'.m')}" ${ct(key+'.m')} value="${g[key+'.m']??''}" onchange="setGrade('${st.id}','${key}.m',this.value)">${dot(key+'.m')}</div>`:'';
+        const rE=eff<100?`<div class="gcell"><small>בחינה <span class="${pc}">${100-eSplit}%</span></small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}.e" class="${kc(key+'.e')}" ${ct(key+'.e')} value="${g[key+'.e']??''}" onchange="setGrade('${st.id}','${key}.e',this.value)">${dot(key+'.e')}</div>`:'';
         const det=(r.details||[])[i], cv=(det&&det.val!==null&&det.val!==undefined)?Math.round(det.val):null;
         const flip=(r.flips||[]).some(f=>f.comp===c.n);
         const avgRow=(rM&&rE)?`<div class="eAvg${cv===null?' pend':''}" title="${flip?'היפוך אחוזים לטובת הבחינה':'משוקלל לפי החלוקה שהוגדרה'}">${cv===null?'<span class="lbl">ממתין לשני הציונים</span>':`${flip?'🔀 ':''}<span class="lbl">משוקלל </span><b>${cv}</b>`}</div>`:'';
@@ -5091,9 +5198,15 @@ function renderSim(m){
     </span>
     <span class="hArt">${art('lab')}</span>
   </div>
-  <div class="simVow">${ic('shield',15)}<span><b>הציונים שתזיני כאן לא נכתבים לטבלת הציונים.</b>
+  <div class="simVow">${ic('shield',15)}<span><b>הציונים שתזיני כאן לא נכתבים לטבלת הציונים.</b><span class="simVowMore">
     הם חיים בשכבת ניסוי נפרדת, לא מופיעים בהזנת ציונים, לא בדוחות, לא בייצוא לאקסל, ולא בממוצע האמיתי.
-    ${nSim?`כרגע יש <b>${nSim}</b> שינויי ניסוי.`:''}</span></div>
+    ${nSim?`כרגע יש <b>${nSim}</b> שינויי ניסוי.`:''}</span></span></div>
+  <!-- בטלפון תרשים שלושת הקופסאות הוא 270 פיקסל של הסבר. כאן אותו מידע בשורה. -->
+  <div class="simMob">
+    <span class="simCnt ${nSim?'on':''}">${nSim} שינויי ניסוי</span>
+    <span class="smImp">${changed.length} משנות מצב</span>
+    ${nSim?`<button class="btn simClear sm" onclick="clearSim()">${ic('refresh',13)}מחיקה</button>`:''}
+  </div>
   <div class="triState">
     <span class="tsBox real">${ic('shield',15)}<b>נתונים אמיתיים</b><i>הטבלה המקורית — לא נוגעים בה</i></span>
     ${ic('arrowLeft',16)}
@@ -5223,9 +5336,11 @@ function simGrid(subj,studs){
         tds+=`<td class="${ntS?'hasNote':''}"><div class="eWrap"><div class="eTag">${noteBtn(st,key,subj.name+' · '+(c.n||''))}${ntS?noteChip(st.id,key):''}</div><div class="eBox one"><div class="gcell"><small>&nbsp;</small><input type="number" min="0" max="100" data-k="s|${st.id}|${key}" class="${cls(key)}" value="${g[key]??''}" onchange="setGradeSim('${st.id}','${key}',this.value)">${need}</div></div></div></td>`;
       }else{
         const eff=c.s;
-        const eSplit=(rSim.flips||[]).some(f=>f.comp===c.n)?(100-eff):eff;
-        const rM=eff>0?`<div class="gcell"><small>מגן ${eSplit}%</small><input type="number" min="0" max="100" data-k="s|${st.id}|${key}.m" class="${cls(key+'.m')}" value="${g[key+'.m']??''}" onchange="setGradeSim('${st.id}','${key}.m',this.value)"></div>`:'';
-        const rE=eff<100?`<div class="gcell"><small>בחינה ${100-eSplit}%</small><input type="number" min="0" max="100" data-k="s|${st.id}|${key}.e" class="${cls(key+'.e')}" value="${g[key+'.e']??''}" onchange="setGradeSim('${st.id}','${key}.e',this.value)"></div>`:'';
+        const flippedS=(rSim.flips||[]).some(f=>f.comp===c.n);
+        const eSplit=flippedS?(100-eff):eff;
+        const pc=(c._custom||flippedS)?'pct keep':'pct';
+        const rM=eff>0?`<div class="gcell"><small>מגן <span class="${pc}">${eSplit}%</span></small><input type="number" min="0" max="100" data-k="s|${st.id}|${key}.m" class="${cls(key+'.m')}" value="${g[key+'.m']??''}" onchange="setGradeSim('${st.id}','${key}.m',this.value)"></div>`:'';
+        const rE=eff<100?`<div class="gcell"><small>בחינה <span class="${pc}">${100-eSplit}%</span></small><input type="number" min="0" max="100" data-k="s|${st.id}|${key}.e" class="${cls(key+'.e')}" value="${g[key+'.e']??''}" onchange="setGradeSim('${st.id}','${key}.e',this.value)"></div>`:'';
         const dvS=(rSim.details||[])[i], cvS=(dvS&&dvS.val!==null&&dvS.val!==undefined)?Math.round(dvS.val):null;
         const avgS=(rM&&rE)?`<div class="eAvg${cvS===null?' pend':''}">${cvS===null?'ממתין לשני הציונים':`משוקלל <b>${cvS}</b>`}</div>`:'';
         const ntM=noteOf(st,key);
@@ -6933,7 +7048,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='13.7';
+const APP_VERSION='13.9';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -7783,7 +7898,9 @@ function renderHelp(m){
   m.innerHTML=`
   ${hero('help','מדריך למשתמש',esc(appTitle())+' · חישוב זכאות, איתור מצטיינות, סימולציות ודוחות',
     [`<button class="btn sm" onclick="openWizard()">${ic('help',14)}הדרכה מהירה</button>`],'help')}
-  <div class="card" style="margin-bottom:14px;">
+  <!-- בטלפון הכרטיסים האלה כופלים את רשימת השאלות שמתחתיהם — שני מסכים של
+       אותו תוכן. במחשב הם קיצור דרך שימושי, ולכן הם נשארים שם. -->
+  <div class="card helpJump" style="margin-bottom:14px;">
     ${secHead('bulb','מה תרצו לעשות?','לחיצה על כרטיס פותחת את ההסבר המתאים')}
     <div class="hGrid">
       ${HELP_CARDS.map(([icn,t,s,gid])=>`<button class="hQ" onclick="goHelp('${gid}')">
@@ -7796,7 +7913,7 @@ function renderHelp(m){
       <span class="note">כל הפרקים למטה — לחיצה על כותרת פותחת וסוגרת.</span>
     </div>
   </div>
-  ${step('📱','שימוש בטלפון ובטאבלט',`
+  ${step('📱','איך עובדים מהטלפון או מהטאבלט?',`
     <b>התקנה (חשוב במיוחד באייפון):</b><br>
     <b>לפני הכול —</b> ודאו שארבעת קובצי ה-PNG של האייקון (icon-180 / icon-192 / icon-512 / favicon-32) הועלו לאותה תיקייה עם index.html. בלעדיהם ההתקנה תעבוד, אבל האייקון יהיה כללי.<br>
     <b>אייפון/אייפד:</b> פותחים את הקישור ב<b>ספארי</b> ← כפתור השיתוף (⬆️) ← <b>"הוספה למסך הבית"</b>. זה גם נותן אייקון וגם <b>מונע מספארי למחוק את הנתונים</b> (ספארי מוחק נתונים של אתרים שלא נכנסו אליהם 7 ימים!).<br>
@@ -7808,37 +7925,37 @@ function renderHelp(m){
     • חלונות נפתחים כ"גלילון" מלמטה, בסגנון אפליקציה.<br>
     • <b>שמירה אוטומטית לקובץ אינה נתמכת בנייד</b> — לכן בנייד חשוב במיוחד לגבות (💾 גיבוי → שמירה בדרייב).<br><br>
     <b>ההמלצה שלי:</b> הזנה כבדה במחשב · צפייה, דוחות והתראות בנייד. העברה בין מכשירים דרך קובץ הגיבוי בדרייב.`)}
-  ${step('✅','לפני שסומכים על הכלי — שתי בדיקות',`
+  ${step('✅','איך אני יודעת שאפשר לסמוך על החישוב?',`
     <b>1. בדיקת מערכת</b> (הגדרות, בראש העמוד): 15 מקרי בדיקה שמאמתים את מנוע החישוב — עיגול, היפוך אחוזים, נרמול, מקצועות רבי-מלל, ספי מעכב. בנוסף בדיקת סביבה: האם הדפדפן שומר, האם חובר קובץ נתונים, האם בוצע גיבוי. הכול צריך להיות ירוק.<br>
     <b>2. אימות מול תעודה רשמית</b> (הגדרות ← "אימות מול תעודה רשמית"): בוחרים תלמידה שיש לה ציונים סופיים רשמיים, מזינים אותם, והכלי מראה אם הוא מחשב <b>בדיוק</b> אותו דבר. <b>זו הבדיקה החשובה ביותר.</b> מומלץ על 3 תלמידות משנה קודמת לפני תחילת עבודה אמיתית.`)}
-  ${step('🛡️','אם משהו התקלקל',`
+  ${step('🛡️','משהו התקלקל — מה עושים?',`
     <b>↩️ ביטול</b> — כפתור בסרגל העליון או Ctrl+Z. שומר 8 פעולות אחרונות ו<b>שורד רענון דף</b>.<br>
     <b>נקודות שמירה</b> (הגדרות) — התוכנה שומרת אוטומטית נקודת שחזור בכל יום עבודה, עד 6 נקודות. אפשר לחזור לכל אחת.<br>
     <b>יומן שינויים</b> (הגדרות) — כל שינוי ציון, סימון, יח"ל, הערה, ייבוא ופעולה גורפת נרשם: מה שונה, ממה למה ומתי. ניתן לייצוא לאקסל. שימושי כשמתגלה ציון שגוי ורוצים לדעת מה קרה.<br>
     <b>בדיקת תקינות בשחזור</b> — קובץ גיבוי פגום או חשוד (למשל ריק, או קטן משמעותית מהנתונים הקיימים) ייחסם או יעורר אזהרה לפני שידרוס משהו.`,'h-fix')}
-  ${step('🎚️','מצב פשוט ומצב מקצועי',`
+  ${step('🎚️','מה ההבדל בין מצב פשוט למצב מקצועי?',`
     התוכנה נפתחת ב<b>מצב פשוט</b>: מוצגות רק היכולות שרכזת צריכה ביום-יום. השינוי הגורף, קטלוג השאלונים, טבלת המשקולות, ערכות הצבע והגופנים — מוסתרים.<br>
     בהגדרות, בראש העמוד, יש מתג <b>"מצב מקצועי"</b> שפותח את הכול. אפשר לעבור הלוך ושוב בכל רגע — שום נתון לא נפגע.<br>
     יש גם <b>הדרכה מהירה</b> (אשף ב-5 שלבים) שנפתחת אוטומטית בפעם הראשונה, וזמינה תמיד מההגדרות.`)}
-  ${step('🏫','התאמה לבית הספר שלכם',`
+  ${step('🏫','איך מתאימים את הכלי לבית הספר שלנו?',`
     <b>הגדרות ← 🏫 זהות בית הספר:</b> מזינים את שם בית הספר ולוחצים שמירה — והוא מופיע מיד בכותרת, בכל הדוחות המודפסים, בנושא המייל ובשם קובץ הגיבוי.<br>
     באותו מקום מעלים גם את <b>הלוגו</b> של בית הספר (כל קובץ תמונה). כברירת מחדל מוצג לוגו כללי.<br>
     זהו — התוכנה שלכם, עם השם והמיתוג שלכם.`,'h-add')}
-  ${step('🔒','נעילה בסיסמה (רשות)',`
+  ${step('🔒','אפשר לנעול את התוכנה בסיסמה?',`
     <b>הגדרות ← 🔒 נעילת הקובץ:</b> אפשר להגדיר סיסמה, ואז בכל פתיחה יופיע מסך כניסה. שימושי במחשב משותף בחדר מורים.<br>
     <b>הסיסמה עצמה לא נשמרת</b> — נשמרת רק חתימה מוצפנת חד-כיוונית שלה (SHA-256).<br>
     <b>🔑 שכחת סיסמה? הנתונים בטוחים.</b> בעת הפעלת הנעילה נוצר <b>קוד שחזור</b> (למשל ML6B-AE85-PLDW-5A68): הוא מוצג על המסך, יורד כקובץ טקסט למחשב, ונשמר בתוך כל קובץ גיבוי. במסך הנעילה יש כפתור <b>"שכחתי סיסמה"</b> — מזינים את הקוד, הנעילה מוסרת, וכל הנתונים נשארים במקומם. אפשר גם להציג את הקוד שוב בכל רגע מההגדרות.<br>
     <b>וכנות לגבי רמת האבטחה:</b> זו הגנה מפני כניסה מזדמנת במחשב משותף, <b>לא הצפנה</b> — מי שמבין במחשבים יוכל לעקוף אותה.`)}
-  ${step('1️⃣','מתחילים — פעם אחת',`
+  ${step('1️⃣','מאיפה מתחילים?',`
     בלשונית <b>👩‍🎓 תלמידות</b> יוצרים כיתה — והסימולטור מקבל אוטומטית את שמה. אין שמות ברירת מחדל ואין דוגמאות.<br>
     צריך שנתון נוסף? <b>➕ חדש</b> בכותרת יוצר סביבה נפרדת לגמרי — כיתות, תלמידות והגדרות משלה.<br>
     בהגדרות אפשר להזין את שם <b>הרכזת הפדגוגית</b> — הוא יופיע בכותרת, בראש כל דוח ובייצוא לאקסל.<br>
     בלשונית <b>👩‍🎓 תלמידות</b> יוצרים כיתות ומוסיפים תלמידות — אחת-אחת, בהדבקת רשימת שמות, או הכי מהר: <b>📤 ייבוא מאקסל</b> בכותרת עם קובץ הסימולטור הישן — הכול נקלט אוטומטית: ציונים, יח"ל, מגמות וסמלי שאלונים.`,'h-start')}
-  ${step('2️⃣','מזינים ציונים',`
+  ${step('2️⃣','איך מזינים ציונים?',`
     בלשונית <b>✏️ הזנת ציונים</b> בוחרים מקצוע וכיתה ומזינים בטבלה — מגן ובחינה לכל שאלון.<br>
     לחיצה על <b>שם תלמידה</b> (בכל מקום באפליקציה) פותחת כרטיס מלא: כל המקצועות, יח"ל, סמלי שאלונים מרשימה נפתחת, ומשקלים.<br>
     <b>צבעים:</b> <span class="grade-bad">אדום = מעכב (מתחת ל-55)</span> · <span class="grade-warn">כתום = גבולי</span> · <span class="grade-exc">זהב = 90+</span> · משבצת מקווקוות = ציון חסר.`,'h-entry')}
-  ${step('🔮','חיזוי אוטומטי — איך הוא עובד וכמה לסמוך עליו',`
+  ${step('🔮','איך עובד החיזוי האוטומטי, וכמה לסמוך עליו?',`
     <b>הרעיון:</b> בתחילת השנה יש רק מגינים והערכות. החיזוי משלים כל בחינה חסרה ומחשב ממוצע וסטטוס צפויים — כך רואים כבר עכשיו מי מועמדת להצטיינות.<br>
     <b>סדר העדיפויות של החיזוי:</b> 1) <b>ציון מבחן כיתתי</b> אם הוזן · 2) ציון המגן בתוספת רמת החיזוי.<br>
     <b>ארבע רמות חיזוי:</b> <b>אופטימי</b> (בחינה = מגן) · <b>מציאותי</b> (מגן פחות 5) · <b>זהיר</b> (מגן פחות 10) · <b>🎯 כיול אוטומטי</b> — הכלי לומד מהנתונים שכבר יש בקובץ מה הפער הממוצע בין בחינה למגן בכל מקצוע, ומחיל אותו.<br>
@@ -7851,7 +7968,7 @@ function renderHelp(m){
     <b>🔴 כדי לעבור:</b> לכל תלמידה עם ציון מעכב מוצג בדיוק איזה ציון בהערכה הפנימית יביא את המקצוע ל-55. דוגמה: מגן 85 ובחינה 24 → ציון המקצוע 39; המחשבון יראה ש<b>נדרש 54</b> בהערכה הפנימית כדי להגיע ל-55 (ועם 53 היא עוד נכשלת).<br>
     <b>⭐ כדי להצטיין:</b> לתלמידות בטווח הרלוונטי מוצגת <b>הדרך הקצרה ביותר</b> לממוצע מעל 90 — באיזה מקצוע להעלות ובכמה. אם רכיב אחד לא מספיק, מוצג הרף האחיד להעלאת כל ההערכות הפנימיות.<br>
     המחשבון תמיד מציע <b>רק העלאה</b> (לא הורדה), מכבד עיגול, משקלים והיפוך אחוזים, ומזהה מקרים שבהם אי אפשר להגיע ליעד.`)}
-  ${step('📋','ייבוא ציונים למקצוע — מוורד או מאקסל',`
+  ${step('📋','איך מייבאים ציונים למקצוע — מוורד או מאקסל?',`
     יש לך קובץ ציונים של מקצוע אחד (למשל כל ציוני הבחינה בלשון)? בלשונית <b>✏️ הזנת ציונים</b> יש כפתור <b>📋 ייבוא ציונים למקצוע</b>.<br>
     <b>מוורד:</b> סמני את הטבלה ← העתקה ← הדבקה בשדה. <b>מאקסל:</b> אותו דבר, או בחירת הקובץ ישירות.<br>
     בוחרים מקצוע, רכיב (איזו בחינה) ואם זה ציון בחינה או מגן — ומקבלים <b>תצוגה מקדימה</b>: מי זוהתה, מי לא, ורק אז מאשרים.<br>
@@ -7860,81 +7977,81 @@ function renderHelp(m){
     <b>צבע גורף:</b> לפני ההחלה בוחרים באיזה צבע ייכנסו כל הציונים — ⚫ שחור (דווח), 🔴 אדום (טרם דווח) או 🔵 כחול (פיקטיבי).<br>
     <b>שני סדרים נתמכים:</b> "שרה כהן 88" וגם "88 שרה כהן" — הכלי מזהה לבד, ואפשר גם לכפות סדר בבורר.<br>
     <b>⚠️ הגנה מפני טעויות:</b> לפני ההחלה מוצגת <b>הערת אזהרה צהובה</b> עם בדיוק מה עומד להתעדכן — מקצוע, רכיב, מגן או בחינה, כיתה וצבע. ואז מופיע חלון אישור אחרון עם אותם פרטים ומספר התלמידות.`,'h-imp')}
-  ${step('↩️','ביטול פעולה (Undo)',`
+  ${step('↩️','טעיתי — איך מבטלים?',`
     כל פעולה שמשנה הרבה נתונים בבת אחת נשמרת אוטומטית לפני הביצוע: ייבוא ציונים, שינוי גורף, צביעה גורפת, ייבוא מאקסל, מחיקות והעברת ניסוי.<br>
     אם טעית — בסרגל העליון יופיע כפתור <b>↩️ בטל: [שם הפעולה]</b>. לחיצה אחת מחזירה את המצב לרגע שלפני. אפשר גם <b>Ctrl+Z</b>.<br>
     נשמרות 12 הפעולות האחרונות, כך שאפשר לחזור כמה צעדים אחורה. (הביטול פועל עד סגירת הדפדפן — לגיבוי ארוך טווח יש 💾 גיבוי.)`)}
-  ${step('🔢','עיגול ציונים ובחינות ללא מגן',`
+  ${step('🔢','איך מעוגלים הציונים, ומה קורה בבחינה בלי מגן?',`
     <b>עיגול:</b> הציון הסופי בכל מקצוע מעוגל למספר שלם — 85.5 ← <b>86</b>, 85.4 ← <b>85</b>. במעבר עכבר על הציון רואים את הערך המדויק לפני העיגול.<br>
     <b>בחינות ללא מגן:</b> במקצועות רבי-המלל (היסטוריה, מחשבת ישראל, אזרחות, תנ"ך, תושב"ע) הבחינות והמשימות המבוקרות הן <b>100% ציון הבחינה</b> — אין ציון מגן, ולכן מוצגת שורת "ציון בחינה" בלבד. אם במקצוע מסוים כן יש מגן, אפשר לשנות את החלוקה בשורת "חלוקה" (או גורף לכל הכיתה בהגדרות).`)}
-  ${step('🔀','היפוך אחוזים לטובת הבחינה',`
+  ${step('🔀','מה זה היפוך אחוזים לטובת הבחינה?',`
     כשציון הבחינה <b>גבוה</b> מציון המגן — המשקל הגדול עובר אוטומטית לבחינה, לטובת התלמידה.<br>
     <b>דוגמה:</b> ברירת המחדל מגן 60% / בחינה 40%. תלמידה קיבלה מגן 70 ובחינה 90 ← החישוב נעשה מגן 40% / בחינה 60% והציון הוא <b>82</b> במקום 78.<br>
     כשהמגן גבוה מהבחינה — נשמרת החלוקה המקורית. ההיפוך מסומן 🔀 בכרטיס התלמידה ובטבלת ההזנה, וניתן לכבות אותו בהגדרות.`)}
-  ${step('🎨','צבעי הציונים — מה דווח ומה לא',`
+  ${step('🎨','מה אומרים צבעי הציונים?',`
     הכלי קורא את <b>צבעי הגופן מקובץ האקסל</b> בייבוא, ושומר על המשמעות שלכם:<br>
     <span style="color:#111; font-weight:800;">■ שחור</span> — ציון שכבר דווח למשרד החינוך · <span style="color:#dc2626; font-weight:800;">■ אדום</span> — ציון אמיתי ונכון שטרם דווח · <span style="color:#1d4ed8; font-weight:800;">■ כחול</span> — ציון פיקטיבי / הערכה.<br>
     הצבעים מוצגים בטבלת ההזנה ובכרטיס התלמידה. לשינוי: <b>לחיצה ימנית</b> על הציון בטבלה, או כפתור העיגול הצבעוני בכרטיס התלמידה (⚫→🔴→🔵).<br>
     בלשונית ההתראות תקבלי סיכום: כמה ציונים טרם דווחו וכמה פיקטיביים — וגם בייצוא לאקסל יש עמודת "סימון".`)}
-  ${step('🔢','ציון חלקי — רואים גם באמצע הדרך',`
+  ${step('🔢','מה זה ציון חלקי?',`
     כשעדיין לא הוזנו כל הרכיבים במקצוע, מוצג <b>ציון חלקי</b> — מודגש בקו מקווקו עם תג "חלקי 30%", כלומר הציון מבוסס על 30% מהמשקל בלבד (למשל רק ההערכה הפנימית).<br>
     <b>למה הוא נראה אחרת?</b> כדי שלא יתבלבל עם ציון סופי. הציון החלקי הוא <b>לא</b> תחזית ו<b>לא</b> נכנס לממוצע, לזכאות או לספירת המצטיינות — שם נספרים רק מקצועות שהושלמו במלואם.<br>
     רוצה לראות תחזית מלאה גם למקצועות חסרים? זה בדיוק תפקיד <b>🔮 החיזוי האוטומטי</b> בלשונית הסימולציה.`)}
-  ${step('⚖️','מגן ובחינה — איך קוראים את התא',`
+  ${step('⚖️','איך קוראים תא של מגן ובחינה?',`
     בכל רכיב חיצוני יש <b>שני שדות זה לצד זה</b>: <b>מגן</b> ו<b>בחינה</b>, ומעל כל אחד כתוב האחוז שלו בשקלול (למשל מגן 30% / בחינה 70%).<br>
     מתחתיהם, אחרי קו מקווקו, מופיעה השורה <b>"משוקלל 84"</b> — זה ציון הרכיב אחרי השקלול, בדיוק כפי שהוא נכנס לציון הסופי. כל עוד חסר אחד מהשניים כתוב <b>"ממתין לשני הציונים"</b> ולא מוצג מספר חלקי מטעה.<br>
     <b>🔀 היפוך:</b> אם ציון הבחינה גבוה מהמגן, המשקל הגדול עובר אוטומטית לבחינה — לטובת התלמידה. במקרה כזה האחוזים שמוצגים הם <b>אלה שבפועל</b>, ולא אלה שבהגדרה, ומופיע הסימן 🔀. אפשר לכבות את ההיפוך בהגדרות ← ספי חישוב.<br>
     את חלוקת המגן/בחינה משנים בהגדרות ← משקולות מקצועות (לכולן), או בכרטיס התלמידה (רק אצלה).`)}
-  ${step('🔤','סמל השאלון — ליד הציון',`
+  ${step('🔤','איפה מזינים סמל שאלון?',`
     ליד כל ציון שיש לו קטלוג שאלונים מופיע <b>תג כחול קטן</b> עם הסמל, למשל <code>E-16471</code>. אם עוד לא נבחר סמל — התג אפור וכתוב בו <b>"סמל +"</b>.<br>
     <b>לחיצה על התג</b> פותחת חלון בחירה: הסמלים כלחצנים גדולים (הנוכחי מודגש), הקלדת סמל אחר, ניקוי, ו<b>"החלה על כל הכיתה המוצגת"</b> כשכולן נבחנו באותו שאלון.<br>
     כך רואים בזמן ההזנה איזה שאלון מוזן, בלי להיכנס לכרטיס התלמידה.`)}
-  ${step('🇬🇧','אנגלית — ארבע הרובריקות',`
+  ${step('🇬🇧','איך עובדת אנגלית עם ארבע הרובריקות?',`
     <b>1. הערכה בית ספרית — 26%</b> · ציון אחד. סמל: <code>B</code> / <code>D</code> / <code>F</code>.<br>
     <b>2. הערכה חיצונית א׳ — 27%</b> · מגן + בחינה. סמל: <code>A</code> / <code>C</code> / <code>E</code> / <code>G</code>.<br>
     <b>3. הערכה חיצונית ב׳ — 27%</b> · מגן + בחינה. אותן אפשרויות סמל.<br>
     <b>4. בחינה בע"פ — 20%</b> · מגן + בחינה. בלי סמל שאלון.<br>
     סך המשקלים 100%. חלוקת המגן/בחינה בכל רובריקה נלקחה מהקובץ המקורי וניתנת לשינוי בהגדרות ← משקולות מקצועות.`)}
-  ${step('🔢','מספר יחידות — מה ברירת המחדל',`
+  ${step('🔢','מה ברירת המחדל של מספר היחידות?',`
     <b>מקצועות חובה</b> (אנגלית, מתמטיקה, תנ"ך, תושב"ע…) — אם לא נבחר מספר יחידות, המערכת מניחה את <b>המקסימום</b>, כי סביר שהתלמידה לומדת אותם.<br>
     <b>מקצועות מוגברים והתמחויות</b> — ברירת המחדל היא <b>"לא לומדת"</b>. אחרת תלמידה שנוספה ידנית הייתה נחשבת כלומדת שלושה מוגברים — 15 יח"ל מדומים בלי שם מקצוע ובלי ציונים.<br>
     בחירה מפורשת גוברת תמיד. בעמודת <b>יח"ל</b> בהזנת הציונים בוחרים לכל תלמידה, ו<b>—</b> פירושו "לא לומדת".<br>
     לראות למי לא נבחר: בסינון היח"ל של המקצוע המוגבר בוחרים <b>"לא לומדות את המקצוע"</b>.`)}
-  ${step('📝','הערות לכל ציון',`
+  ${step('📝','איך מוסיפים הערה לציון?',`
     בכל קובייה, בשורת הסמל, יש כפתור <b>📝</b>. לחיצה פותחת חלון כתיבה חופשי — "נעדרה מהמבחן, מועד ב'", "אישור ועדת חריגים", "הציון טרם סופי".<br>
     כשיש הערה הכפתור נצבע כתום עם נקודה, ובטבלת ההזנה מופיע <b>משולש כתום</b> בפינת התא — כך רואים מיד שיש הערה בלי להיכנס לכרטיס (מעבר עכבר מציג אותה).<br>
     יש גם <b>הערה כללית למקצוע</b> — הכפתור 📝 שליד שם המקצוע בכותרת.<br>
     <b>בדוחות:</b> ליד ציון המקצוע מופיע סימן <b>📝</b> ומשולש כתום בפינה; מעבר עכבר מציג את ההערה המלאה (כולל הערות הרכיבים והערת המקצוע יחד). בסוף הדוח יש טבלת "📝 הערות" עם כולן, וגם בייצוא לאקסל.`)}
-  ${step('🎨','אילו צבעים נספרים בחישוב',`
+  ${step('🎨','אילו צבעים נספרים בחישוב?',`
     <b>שחור</b> (דווח למשרד) ו<b>אדום</b> (אמיתי, טרם דווח) — נספרים <b>תמיד</b>. הצבע הוא סימון ניהולי בלבד ואינו משנה ציון.<br>
     <b>כחול</b> (פיקטיבי / הערכה) — כברירת מחדל גם הוא נספר, אבל בהגדרות אפשר לכבות: אז הוא נחשב כ"לא הוזן", והמקצוע יוצג כ<b>חלקי</b> עד שיגיע הציון האמיתי. שימושי כשרוצים לראות את התמונה האמיתית בלבד.`)}
-  ${step('➖','הסרה והחזרה של רכיבים',`
+  ${step('➖','איך מסירים או מחזירים רכיב?',`
     לא צריך רכיב מסוים אצל תלמידה? מעבירים עכבר על הקובייה ולוחצים על <b>✕</b> בפינה.<br>
     רכיב ללא משקל פשוט נעלם מהתצוגה — הציון לא משתנה.<br>
     <b>"עבודה נוספת" אינה מוצגת יותר כברירת מחדל</b> — היא מוסיפה עומס מיותר. כשצריך אותה, לוחצים <b>➕ עבודה נוספת</b> בכותרת המקצוע.<br>
     לרכיב עם משקל תופיע אזהרה: משקלו יתאפס והאחוזים יתחלקו מחדש בין השאר.<br>
     בתחתית המקצוע מופיעה שורת <b>"רכיבים שהוסרו"</b> — לחיצה על ➕ מחזירה את הרכיב יחד עם משקל ברירת המחדל שלו.`)}
-  ${step('💜','התאמה אישית לתלמידה',`
+  ${step('💜','איך עושים התאמה אישית לתלמידה אחת?',`
     בכרטיס התלמידה אפשר לשנות <b>רק אצלה</b>: חלוקת מגן/בחינה (למשל נבחנה בשנה אחרת), משקל כל רכיב, וסמל שאלון. רכיב מותאם נצבע סגול, ותג "מותאם אישית" מופיע במקצוע. <b>↩️ איפוס התאמות</b> מחזיר לרגיל.<br>
     במגמות (פיזיקה, ביולוגיה...) — <b>📋 מבנה מהקטלוג</b> מחיל בקליק את כל המשקלים והסמלים הנכונים.`)}
-  ${step('🟢','עבודה נוספת לשיפור ציון',`
+  ${step('🟢','איך מוסיפים עבודה נוספת לשיפור ציון?',`
     בכל מקצוע יש רכיב ירוק "עבודה נוספת / הערכה חלופית". נותנים לו משקל (למשל 20%) וציון — והאחוזים של שאר הרכיבים מתחלקים מחדש יחסית, אוטומטית. שימושי לתת לתלמידה הזדמנות לשפר ציון.`)}
-  ${step('🧪','סימולציה — בלי לקלקל כלום',`
+  ${step('🧪','מה זה סימולציה, ובמה היא לא נוגעת?',`
     לשונית הסימולציה היא <b>העתק ניסוי</b>: משנים שם ציונים חופשי, כל שינוי נצבע כתום 🔶, והטבלה האמיתית לא נפגעת.<br>
     סימון <b>🔮 חיזוי אוטומטי</b> משלים כל בחינה חסרה לפי ציון המגן — כך כבר בתחילת השנה, אחרי הזנת מגינים או הערכות מורים בלבד, רואים מי צפויה להיות מצטיינת בסוף השנה.<br>
     בסיום: <b>🧹 מחיקת השינויים</b> או <b>💾 העברתם לטבלה האמיתית</b> אם התרחיש התממש.`,'h-sim')}
-  ${step('📊','דשבורד, התראות ודוחות',`
+  ${step('📊','מה יש בדשבורד, בהתראות ובדוחות?',`
     <b>📊 דשבורד</b> — תמונת מצב: זכאות, מצטיינות, פוטנציאל, גרפים ומובילות.<br>
     <b>תנאי הצטיינות:</b> ממוצע <b>מעל 90</b> (לא כולל 90) + אנגלית 5 יח"ל + מתמטיקה 4/5 יח"ל + בלי מעכבים.<br>
     <b>🚨 התראות</b> — אוטומטיות: מעכבים, גבוליים, פערי מגן-בחינה חריגים, חסרים, וקרובות להצטיינות.<br>
     <b>📄 דוחות</b> — דוח כיתתי מעוצב: הדפסה/PDF, שליחה במייל, העתקה, וייצוא לאקסל.`,'h-rep')}
-  ${step('💾','שמירה אוטומטית לקובץ — כמו באקסל (מומלץ!)',`
+  ${step('💾','איך מפעילים שמירה אוטומטית לקובץ?',`
     בכותרת יש כפתור <b>💾 חיבור קובץ נתונים</b>. לוחצים עליו פעם אחת, בוחרים איפה לשמור את הקובץ — ומאותו רגע <b>כל שינוי נשמר אוטומטית לקובץ הזה</b>, בדיוק כמו שאקסל שומר את עצמו.<br>
     <b>למה זה חשוב:</b> הקובץ נמצא במחשב שלכם, בשליטתכם. גם אם תנקו את הדפדפן, תחליפו מחשב או תתקינו מחדש — פותחים את הקובץ (📂) והכול חוזר.<br>
     <b>הטיפ הכי חשוב:</b> שמרו את הקובץ בתיקיית <b>Google Drive</b> במחשב — כך הוא מסונכרן לענן אוטומטית, ואפשר לפתוח אותו גם ממחשב אחר.<br>
     בכותרת תראו תמיד את שם הקובץ ושעת השמירה האחרונה (💾 שם-הקובץ ✓ 14:32). אחרי הפעלה מחדש של הדפדפן ייתכן שתתבקשו ללחוץ פעם אחת על "🔓 חידוש חיבור" — זו דרישת אבטחה של הדפדפן.<br>
     <b>הערה:</b> התכונה עובדת ב-Chrome וב-Edge במחשב. בטלפון או בדפדפן אחר — משתמשים ב-💾 גיבוי הידני.`)}
-  ${step('💾','גיבוי ידני — לגיבוי נוסף והעברה בין מכשירים',`
+  ${step('💾','איך עושים גיבוי, ואיך מעבירים בין מכשירים?',`
     <b>לעבוד מכמה מכשירים (מחשב + בית + טלפון):</b> הכלי שומר את הנתונים בדפדפן של כל מכשיר בנפרד, ולכן העברה נעשית דרך קובץ גיבוי:<br>
     1. במכשיר שעבדת בו: <b>💾 גיבוי</b> ← הקובץ יורד ← שומרים אותו בגוגל דרייב (או שולחים לעצמכם במייל).<br>
     2. במכשיר האחר: פותחים את אותו קישור ← <b>♻️ שחזור</b> ← בוחרים את הקובץ מהדרייב. הגיבוי כולל <b>את כל הסימולטורים יחד</b>, כך שהכול עובר בפעולה אחת.<br>
@@ -7989,6 +8106,58 @@ try{
     }
   }
 }catch(e){}
+/* ══ כפתור "חזור" — הפער האמיתי של אנדרואיד ══
+   לאייפון אין כפתור חזור קבוע, ולכן הבעיה הזו לא נראית שם. באנדרואיד יש —
+   כפתור או מחווה — ובלי טיפול לחיצה עליו כשחלון פתוח יוצאת מהתוכנה כולה
+   במקום לסגור את החלון. הנתונים לא נאבדים (כל שינוי נשמר מיד), אבל הרכזת
+   נזרקת מהאפליקציה וצריכה לטעון מחדש 600KB.
+   כאן: כשחלון נפתח נדחפת רשומת היסטוריה, ו"חזור" סוגר את החלון ולא יותר.
+   מיושם בהאזנה לשינוי מחלקות, בלי לגעת ב-13 מקומות שפותחים חלונות. */
+const BACK_MODALS=[['studentModal','closeStudent'],['giModal','closeGradeImport'],
+  ['tdModal','closeTestsDlg'],['ndModal','closeNote'],['vfModal','closeVerify'],
+  ['wzModal','closeWizard'],['cfModal',null],['cmdk','closeCmd']];
+let _backArmed=false, _backSkipPop=false;
+/* הרשימה מסודרת מהחלון החיצוני לפנימי, והסריקה מהסוף — כך ש"חזור"
+   סוגר את החלון שנפתח מעל (הערה מעל כרטיס תלמידה, חיפוש מהיר מעל הכול)
+   ולא את זה שמתחתיו. */
+function backAnyOpen(){
+  for(let i=BACK_MODALS.length-1;i>=0;i--){
+    const el=document.getElementById(BACK_MODALS[i][0]);
+    if(el&&el.classList.contains('show')) return BACK_MODALS[i];
+  }
+  return null;
+}
+function backCloseTop(){
+  const m=backAnyOpen(); if(!m) return false;
+  const fn=m[1];
+  if(fn&&typeof window[fn]==='function'){ try{ window[fn](); }catch(e){ const el=document.getElementById(m[0]); if(el) el.classList.remove('show'); } }
+  else { const el=document.getElementById(m[0]); if(el) el.classList.remove('show'); }
+  return true;
+}
+function initBackButton(){
+  if(typeof MutationObserver==='undefined'||!window.history||!history.pushState) return;
+  const watch=BACK_MODALS.map(m=>document.getElementById(m[0])).filter(Boolean);
+  if(!watch.length) return;
+  const sync=()=>{
+    const open=!!backAnyOpen();
+    if(open&&!_backArmed){
+      _backArmed=true;
+      try{ history.pushState({bagrutModal:1},''); }catch(e){ _backArmed=false; }
+    }else if(!open&&_backArmed){
+      _backArmed=false;
+      // נסגר בדרך אחרת (X · רקע · Escape) — מסלקים את הרשומה שדחפנו, אחרת
+      // ההיסטוריה מתמלאת והרכזת צריכה חמש לחיצות "חזור" כדי לצאת מהתוכנה
+      try{ if(history.state&&history.state.bagrutModal){ _backSkipPop=true; history.back(); } }catch(e){}
+    }
+  };
+  const obs=new MutationObserver(sync);
+  watch.forEach(el=>obs.observe(el,{attributes:true,attributeFilter:['class']}));
+  window.addEventListener('popstate',function(){
+    if(_backSkipPop){ _backSkipPop=false; return; }
+    if(backAnyOpen()){ _backArmed=false; backCloseTop(); }
+  });
+}
+initBackButton();
 (function(){ const f=document.getElementById('appFoot'); if(f) f.textContent=appTitle(); document.title=appTitle();
   const v=document.getElementById('appVer'); if(v) v.textContent=APP_VERSION;
   const vd=document.getElementById('appVerDate'); if(vd) vd.textContent=APP_DATE; })();
