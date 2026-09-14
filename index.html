@@ -7087,7 +7087,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='14.2';
+const APP_VERSION='14.3';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -7221,6 +7221,9 @@ function driveName(){
     const ua=navigator.userAgent||'';
     n=/iPhone/.test(ua)?'אייפון':/iPad/.test(ua)?'אייפד':/Android/.test(ua)?'אנדרואיד':
       /Macintosh/.test(ua)?'מק':/Windows/.test(ua)?'מחשב Windows':'מכשיר';
+    // שני מחשבי Windows קיבלו בדיוק אותו שם, ואז "התקבלו עדכונים ממחשב Windows"
+    // לא אמר כלום. סיומת קצרה מבדילה ביניהם עד שנותנים להם שם אמיתי בהגדרות.
+    n+=' '+Math.random().toString(36).slice(2,4).toUpperCase();
     LS.setItem('bagrutDeviceName',n);
   }
   return n;
@@ -7500,7 +7503,20 @@ async function driveSyncAll(initial){
     if(dv.barDirty){ dv.barDirty=false; try{ renderProfileBar(); }catch(e){} }
     if(dv.state!=='conflict'&&dv.state!=='error'){ dv.state='synced'; dv.lastSync=Date.now(); LS.setItem('bagrutDvLast',String(dv.lastSync)); }
   }catch(e){ dv.state='error'; dv.lastErr=e.message; }
-  dv.busy=false; renderSyncInd(); if(initial) render();
+  dv.busy=false; renderSyncInd();
+  /* ── הבאג שגרם ל"הוא מאבד לי נתונים" ──
+     סנכרון שאינו הראשון עדכן את state ולא צייר את המסך. מי שהשאיר את הלשונית
+     פתוחה בבית בזמן שהזין ציונים במשרד — ראה את המסך הישן, והסיק שהנתונים אבדו.
+     כל שינוי שהגיע מבחוץ מצייר מחדש, ואומר מאיזה מכשיר הוא הגיע. */
+  const got=(dv.pulled||[]).length;
+  if(initial) render();
+  else if(got){
+    try{ renderKeepScroll(); }catch(e){ try{ render(); }catch(e2){} }
+    try{ renderProfileBar(); }catch(e){}
+    const p=dv.pulled[0];
+    toast('התקבלו עדכונים'+(p.device?' מ'+p.device:'')+' · '+p.n+' תלמידות');
+  }
+  dv.pulled=[];
 }
 /* מכשיר חדש שהתחבר לדרייב קיבל את כל הנתונים אבל נחסם על מסך רישיון, ונדרש
    להקליד את הקוד שוב. הקוד שייך למוסד, לא למכשיר — ולכן הוא מגיע עם הנתונים.
@@ -7547,7 +7563,12 @@ function driveApplyRemote(pid,pl,rv){
   if(pl&&pl.state) pl.state=withDefaults(pl.state);        // גם קובץ מגרסה ישנה בדרייב
   driveRegisterProfile(pid,pl);                             // חובה לפני הכתיבה: בלי רשומת פרופיל הנתונים בלתי נגישים
   const cur=(pid===currentProfileId)?state:loadProfileState(pid);
+  const sigBefore=payloadSig({state:cur||{}});
   const merged=applyPayload(cur,pl);
+  /* האם באמת הגיע שינוי? בלי זה אי אפשר לדעת אם צריך לצייר את המסך מחדש —
+     וזה היה הבאג: הנתונים התעדכנו בזיכרון והמסך המשיך להראות את הישן. */
+  if(payloadSig({state:merged})!==sigBefore)
+    (dv.pulled=dv.pulled||[]).push({pid,device:(pl&&pl.device)||'',n:((merged.students||[]).length)});
   if(pid===currentProfileId){ state=merged; save(true); }
   else saveProfileState(pid,merged);
   setLocalVer(pid,rv); dv.sig[pid]=payloadSig(pl); saveBase(pid,merged);
