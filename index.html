@@ -4008,9 +4008,9 @@ function renderStudents(m){
         <div class="dzBody">
           <div class="note" style="margin-bottom:8px;">פעולות שאינן ניתנות לביטול (למעט "ביטול פעולה" מיד לאחר מכן). מומלץ לגבות לפני.</div>
           <div class="dzRow"><span>מחיקת כל התלמידות <i>· הכיתות יישארו</i></span>
-            <button class="btn dz sm" onclick="if(confirm('למחוק את כל התלמידות (הכיתות יישארו)?')){pushUndo('מחיקת כל התלמידות');state.students=[];save();render();}">מחיקה</button></div>
+            <button class="btn dz sm" onclick="if(confirm('למחוק את כל התלמידות (הכיתות יישארו)?')){pushUndo('מחיקת כל התלמידות');state.students=[];allowEmptySync();save();render();}">מחיקה</button></div>
           <div class="dzRow"><span>מחיקת כיתות + תלמידות <i>· בסימולטור הזה בלבד</i></span>
-            <button class="btn dz sm" onclick="if(confirm('למחוק את כל הכיתות ואת כל התלמידות בסימולטור הזה?')){pushUndo('מחיקת כיתות ותלמידות');state.students=[];state.classes=[];save();render();}">מחיקה</button></div>
+            <button class="btn dz sm" onclick="if(confirm('למחוק את כל הכיתות ואת כל התלמידות בסימולטור הזה?')){pushUndo('מחיקת כיתות ותלמידות');state.students=[];state.classes=[];allowEmptySync();save();render();}">מחיקה</button></div>
           <div class="dzRow"><span>איפוס מלא <i>· כל הסימולטורים במכשיר</i></span>
             <button class="btn dz sm" onclick="factoryReset()">איפוס</button></div>
           ${state.students.length?`<div class="dzRow"><span>נתוני הדגמה <i>· 24 תלמידות בדיוניות</i></span>
@@ -7087,7 +7087,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='14.1';
+const APP_VERSION='14.2';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -7236,8 +7236,11 @@ function syncPayload(pid,st,ver){
   SYNC_SKIP_STATE.forEach(k=>{ delete s[k]; });
   (s.students||[]).forEach(x=>SYNC_SKIP_STUD.forEach(k=>{ delete x[k]; }));
   const pr=profiles.find(p=>p.id===pid)||{};
+  /* הרישיון נוסע עם החבילה. הוא של המוסד, והתיקייה בדרייב היא של אותו מוסד —
+     ולכן אין כאן הרחבה של ההרשאה, רק חיסכון בהקלדה חוזרת בכל מכשיר חדש. */
   return { schemaVer:SCHEMA_VER, appVer:APP_VERSION, version:ver, id:pid,
-           name:pr.name||'', device:driveName(), savedAt:new Date().toISOString(), state:s };
+           name:pr.name||'', device:driveName(), savedAt:new Date().toISOString(),
+           lic:(licName&&licKey)?{n:licName,k:licKey}:null, state:s };
 }
 // מיזוג נתון שהתקבל מהדרייב חזרה למקומי — בלי לדרוס את מה שלא מסתנכרן
 function applyPayload(local,pl){
@@ -7327,7 +7330,8 @@ async function driveIndex(){
   const r=await dvFetch(DRIVE_API+'/files?spaces=appDataFolder&pageSize=200&fields=files(id,name,modifiedTime,appProperties)');
   const j=await r.json();
   dv.files={};
-  (j.files||[]).forEach(f=>{ const m=/^sim-(.+)\.json$/.exec(f.name); if(m) dv.files[m[1]]={fid:f.id,mtime:f.modifiedTime,ver:+((f.appProperties||{}).ver||0)}; });
+  (j.files||[]).forEach(f=>{ const m=/^sim-(.+)\.json$/.exec(f.name); if(m){ const ap=f.appProperties||{};
+    dv.files[m[1]]={fid:f.id,mtime:f.modifiedTime,ver:+(ap.ver||0),n:(ap.n===undefined?null:+ap.n)}; } });
   return dv.files;
 }
 async function driveLoad(pid){
@@ -7337,7 +7341,9 @@ async function driveLoad(pid){
 }
 async function driveWrite(pid,pl){
   const f=dv.files[pid];
-  const meta={name:'sim-'+pid+'.json',mimeType:'application/json',appProperties:{ver:String(pl.version),schema:String(SCHEMA_VER)}};
+  // n = מספר התלמידות. נשמר כדי ששומר הסף בצד ההעלאה יוכל להשוות בלי להוריד את הקובץ.
+  const meta={name:'sim-'+pid+'.json',mimeType:'application/json',
+    appProperties:{ver:String(pl.version),schema:String(SCHEMA_VER),n:String(((pl.state||{}).students||[]).length)}};
   if(!f) meta.parents=['appDataFolder'];
   const bnd='-------bagrut'+Date.now();
   const body='--'+bnd+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+
@@ -7375,7 +7381,9 @@ function dvStatus(){
   if(!dv.on) return 'nodrive';
   if(!navigator.onLine) return 'offline';
   if(dv.busy) return 'saving';
+  if(dv.state==='blocked') return 'blocked';   // התור לא ריק בכוונה — אבל אסור להציג "נשמר במכשיר"
   if(Object.keys(dv.queue).length) return 'local';
+  if(dv.state==='blocked') return 'blocked';   // ריק מול מלא — ממתין להחלטה, לא מוחק
   if(dv.state==='conflict') return 'conflict';
   if(dv.state==='error') return 'error';
   return 'synced';
@@ -7405,6 +7413,25 @@ async function driveSave(pid,force){
       dv.busy=false; dv.state='conflict'; renderSyncInd();
       await driveConflict(pid); return;      // חובה להמתין: הקורא מסיק מכאן שהשמירה הסתיימה
     }
+    /* ══ שומר סף בצד ההעלאה ══
+       בצד ההורדה כבר היה שומר סף ("קובץ ריק לא מוחק מכשיר מלא"), אבל בצד ההעלאה
+       הייתה רק בדיקת גרסה — ובדיקת גרסה לא עוזרת כשהמכשיר הזה כבר סנכרן פעם אחת
+       וקיבל את מספר הגרסה של הדרייב. אז מספיק ששחזור גיבוי ישן, איפוס או מחיקה
+       בטעות ירוקנו את המכשיר, וההעלאה הבאה מוחקת בשקט את כל התלמידות בדרייב.
+       מכאן: מצב ריק לעולם לא נכתב על קובץ מלא בלי החלטה מפורשת. */
+    const nLocal=((stt.students||[]).length);
+    if(nLocal===0&&dv.allowEmpty[pid]){ delete dv.allowEmpty[pid]; }   // מחיקה מכוונת — היתר חד־פעמי, ונגמר
+    else if(nLocal===0&&remote){
+      let nRemote=remote.n;
+      if(nRemote===null||nRemote===undefined){                  // קובץ שנכתב לפני שהתכונה הזו קיימת
+        try{ const probe=await driveLoad(pid); nRemote=((probe&&probe.state&&probe.state.students)||[]).length; }
+        catch(e){ nRemote=null; }
+      }
+      if(nRemote>0){
+        dv.busy=false; dv.state='blocked'; dv.blocked={pid,n:nRemote};
+        renderSyncInd(); driveEmptyGuard(pid,nRemote); return;
+      }
+    }
     await driveWrite(pid,pl);
     setLocalVer(pid,nextVer); dv.sig[pid]=sig; clearDirty(pid); saveBase(pid,stt);
     dv.lastSync=Date.now(); dv.state='synced'; dv.lastErr='';
@@ -7413,6 +7440,34 @@ async function driveSave(pid,force){
     dv.state='error'; dv.lastErr=e.message;                                     // נשאר בתור
   }
   dv.busy=false; renderSyncInd();
+}
+dv.blocked=null; dv.allowEmpty={};
+/* מחיקה מכוונת מול מחיקה בטעות — ההבדל הוא מאיפה היא הגיעה.
+   פעולה יזומה מ"פעולות מחיקה ואיפוס" מסמנת היתר חד־פעמי; כל התרוקנות אחרת
+   (שחזור גיבוי ישן, באג בסנכרון, מכשיר שנפתח ריק) נעצרת בשומר הסף. */
+function allowEmptySync(pid){ dv.allowEmpty[pid||currentProfileId]=true; }
+/* המכשיר הזה ריק והדרייב מלא. במקום למחוק בשקט — עוצרים, מסבירים, ונותנים שתי דרכים.
+   ברירת המחדל היא תמיד להציל: להוריד מהדרייב. */
+async function driveEmptyGuard(pid,nRemote){
+  const pr=profiles.find(x=>x.id===pid)||{};
+  const nm=pr.name||'(ללא שם)';
+  const ok=confirm(
+    '⚠️ עצרתי לפני מחיקה\n\n'+
+    'המכשיר הזה ריק מתלמידות, ובגוגל דרייב יש '+nRemote+' תלמידות בסימולטור "'+nm+'".\n\n'+
+    'אם אעלה מכאן — הן יימחקו מהדרייב ומכל מכשיר אחר.\n\n'+
+    'אישור = להוריד מהדרייב את '+nRemote+' התלמידות למכשיר הזה (מומלץ).\n'+
+    'ביטול = להשאיר הכול כמו שהוא ולא לסנכרן כלום כרגע.');
+  if(!ok){ dv.state='blocked'; renderSyncInd(); return; }
+  try{
+    const pl=await driveLoad(pid);
+    if(!pl||!((pl.state&&pl.state.students)||[]).length){ toast('הקובץ בדרייב ריק — לא בוצע שינוי'); dv.state='error'; renderSyncInd(); return; }
+    clearDirty(pid);                                    // המצב הריק לא מחכה יותר בתור להעלאה
+    pushUndo('הורדה מהדרייב');
+    driveApplyRemote(pid,pl,dv.files[pid].ver);
+    dv.blocked=null; dv.state='synced'; dv.lastSync=Date.now();
+    renderProfileBar(); render();
+    toast('שוחזרו '+((pl.state.students||[]).length)+' תלמידות מהדרייב');
+  }catch(e){ dv.state='error'; dv.lastErr=e.message; renderSyncInd(); }
 }
 async function driveSyncAll(initial){
   if(!dv.on||!driveEnabled()) return;
@@ -7447,6 +7502,20 @@ async function driveSyncAll(initial){
   }catch(e){ dv.state='error'; dv.lastErr=e.message; }
   dv.busy=false; renderSyncInd(); if(initial) render();
 }
+/* מכשיר חדש שהתחבר לדרייב קיבל את כל הנתונים אבל נחסם על מסך רישיון, ונדרש
+   להקליד את הקוד שוב. הקוד שייך למוסד, לא למכשיר — ולכן הוא מגיע עם הנתונים.
+   מכשיר שכבר יש בו רישיון לא מושפע: מה שהוקלד ידנית תמיד גובר. */
+function driveAdoptLic(pl){
+  try{
+    if(!pl||!pl.lic||!pl.lic.n||!pl.lic.k) return false;
+    if(licName&&licKey) return false;                       // כבר יש כאן רישיון — לא נוגעים
+    if(!licValidFor(pl.lic.n,pl.lic.k)) return false;       // קוד שאינו תואם לשם — מתעלמים
+    licName=pl.lic.n; licKey=pl.lic.k;
+    LS.setItem('bagrutLicName',licName); LS.setItem('bagrutLicKey',licKey);
+    try{ hideLicWall(); licRefresh(); renderLicBar(); }catch(e){}
+    return true;
+  }catch(e){ return false; }
+}
 function driveRegisterProfile(pid,pl){
   dv.barDirty=true;                                          // השם/הרשימה השתנו — שורת הסימולטור חייבת להתרנדר מחדש
   let pr=profiles.find(p=>p.id===pid);
@@ -7474,6 +7543,7 @@ function driveLanding(){
   }
 }
 function driveApplyRemote(pid,pl,rv){
+  driveAdoptLic(pl);                                        // רישיון מהדרייב — רק אם אין כאן אחד
   if(pl&&pl.state) pl.state=withDefaults(pl.state);        // גם קובץ מגרסה ישנה בדרייב
   driveRegisterProfile(pid,pl);                             // חובה לפני הכתיבה: בלי רשומת פרופיל הנתונים בלתי נגישים
   const cur=(pid===currentProfileId)?state:loadProfileState(pid);
@@ -7794,7 +7864,8 @@ function diagSave(){
 const DVS={ off:{t:'',c:''}, nodrive:{t:'לא מחובר לדרייב',c:'dvOff'}, local:{t:'נשמר במכשיר',c:'dvLocal'},
   saving:{t:'מסנכרן…',c:'dvSaving'}, synced:{t:'מסונכרן',c:'dvOk'},
   offline:{t:'אין אינטרנט — ממתין',c:'dvWarn'}, conflict:{t:'גרסה חדשה ממכשיר אחר',c:'dvWarn'},
-  error:{t:'הסנכרון נכשל',c:'dvBad'} };
+  error:{t:'הסנכרון נכשל',c:'dvBad'},
+  blocked:{t:'הסנכרון נעצר — המכשיר ריק',c:'dvBad'} };
 function renderSyncInd(){
   const el=document.getElementById('syncInd'); if(!el) return;
   const s=dvStatus();
@@ -7803,7 +7874,9 @@ function renderSyncInd(){
   el.style.display='inline-flex'; el.className='syncInd '+d.c;
   el.title=dv.lastErr||d.t;
   el.innerHTML=`${ic(s==='synced'?'check':s==='saving'?'refresh':s==='nodrive'?'folder':'warn',13)}<span class="hide-sm">${d.t}</span>`;
-  el.onclick=()=>{ if(!dv.on) setTab('settings'); else driveSyncAll(); };
+  el.onclick=()=>{ if(!dv.on) setTab('settings');
+    else if(dv.state==='blocked'&&dv.blocked) driveEmptyGuard(dv.blocked.pid,dv.blocked.n);
+    else driveSyncAll(); };
 }
 function driveInfoDlg(){
   infoDlg('סנכרון בין מכשירים — טרם הוגדר',
