@@ -7087,7 +7087,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='14.3';
+const APP_VERSION='15.0';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -7200,14 +7200,20 @@ function updAutoInit(){
    ----------------------------------------------------------------------------
    עקרונות (לפי מסמך האפיון 2.0):
    • ספק התוכנה אינו מחזיק שום נתון. הקובץ יושב בתיקייה נסתרת בדרייב של המשתמשת.
-   • ההרשאה היא drive.appdata — מסומנת אצל Google כלא-רגישה, ומעניקה גישה
+   • ההרשאות הן drive.appdata ו-drive.file — שתיהן מסומנות אצל Google כלא-רגישות, ומעניקות גישה
      לתיקיית האפליקציה בלבד. אין גישה לשום קובץ אחר בדרייב.
    • התוכנה עובדת במלואה גם בלי חיבור. החיבור הוא תוספת, לא תנאי.
    • localStorage נשאר ה-cache; הדרייב הוא מקור האמת לסנכרון בין מכשירים.
    ============================================================================ */
 const DRIVE_CLIENT_ID='908700355843-mmivpmd09gobn5ub3nfgmann12h1qg72.apps.googleusercontent.com';   // מזהה הלקוח מ-Google Cloud (פרויקט Bagrut Simulator).
 const SCHEMA_VER=1;                 // גרסת מבנה הנתונים. לקוח ישן לא יכתוב על חדש.
-const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata';
+/* שתי הרשאות, שתיהן מסומנות אצל Google כ"לא רגישות" (אימות בסיסי, בלי סקירת אבטחה):
+   · drive.appdata — התיקייה הנסתרת שבה יושב הסנכרון. מהירה, מבודדת, ובלתי נראית.
+   · drive.file    — יצירה ועריכה של קבצים שהאפליקציה עצמה יצרה בלבד. משמש אך ורק
+     לתיקיית הגיבוי הגלויה. אין בה גישה לשום קובץ אחר בדרייב של המשתמשת. */
+const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file';
+const VIS_FOLDER='סימולטור בגרות — גיבויים';
+const VIS_KEEP=12;                     // כמה גיבויים מתוארכים לשמור לפני שמוחקים ישנים
 const DRIVE_API='https://www.googleapis.com/drive/v3';
 const DRIVE_UP='https://www.googleapis.com/upload/drive/v3';
 
@@ -7517,6 +7523,7 @@ async function driveSyncAll(initial){
     toast('התקבלו עדכונים'+(p.device?' מ'+p.device:'')+' · '+p.n+' תלמידות');
   }
   dv.pulled=[];
+  try{ visAuto(); }catch(e){}          // גיבוי גלוי פעם ביום, אחרי שהסנכרון הצליח
 }
 /* מכשיר חדש שהתחבר לדרייב קיבל את כל הנתונים אבל נחסם על מסך רישיון, ונדרש
    להקליד את הקוד שוב. הקוד שייך למוסד, לא למכשיר — ולכן הוא מגיע עם הנתונים.
@@ -7905,6 +7912,193 @@ function driveInfoDlg(){
     'עד שהוא יוגדר, התוכנה עובדת בדיוק כמו קודם: הנתונים נשמרים בדפדפן של המכשיר הזה, והגיבוי לקובץ פועל כרגיל.\n\n'+
     'חשוב לדעת: גם אחרי ההגדרה, הנתונים נשמרים בחשבון הדרייב שלך בתיקייה נסתרת של האפליקציה. ספק התוכנה אינו מחזיק ואינו רואה אותם.');
 }
+/* ══════════ גיבוי גלוי בדרייב ══════════
+   התיקייה הנסתרת (appDataFolder) היא מצוינת לסנכרון אבל אי אפשר לראות אותה.
+   כאן נוצרת תיקייה רגילה ב"הדרייב שלי" עם קבצי גיבוי מתוארכים — נראים, ניתנים
+   לפתיחה, להורדה ולשיתוף. ההרשאה drive.file מאפשרת לאפליקציה ליצור ולערוך רק
+   את הקבצים שהיא עצמה יצרה; לשאר הדרייב אין לה גישה.
+   הסנכרון עצמו לא השתנה כהוא זה — זו שכבה נוספת לצידו. */
+let vis={fid:'',busy:false,last:0,err:''};
+try{ vis.fid=LS.getItem('bagrutVisFolder')||''; vis.last=+(LS.getItem('bagrutVisLast')||0); }catch(e){}
+function visEnabled(){ try{ return LS.getItem('bagrutVisOn')==='1'; }catch(e){ return false; } }
+function visToggle(on){
+  try{ LS.setItem('bagrutVisOn',on?'1':'0'); }catch(e){}
+  renderKeepScroll();
+  if(on) visBackup(true);
+}
+/* מאתרת את התיקייה שלנו, או יוצרת אותה. drive.file מחזיר ברשימה רק קבצים
+   שהאפליקציה יצרה — ולכן אפשר למצוא אותה שוב גם אחרי ניקוי הדפדפן. */
+async function visFolder(){
+  if(vis.fid){
+    try{ const r=await dvFetch(DRIVE_API+'/files/'+vis.fid+'?fields=id,trashed');
+         const j=await r.json(); if(j&&j.id&&!j.trashed) return vis.fid; }catch(e){}
+    vis.fid='';
+  }
+  const q=encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${VIS_FOLDER}' and trashed=false`);
+  const r=await dvFetch(DRIVE_API+'/files?q='+q+'&fields=files(id,name)&pageSize=10');
+  const j=await r.json();
+  if(j.files&&j.files.length){ vis.fid=j.files[0].id; }
+  else{
+    const r2=await dvFetch(DRIVE_API+'/files?fields=id',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:VIS_FOLDER,mimeType:'application/vnd.google-apps.folder'})});
+    const j2=await r2.json();
+    if(!j2.id) throw new Error('יצירת התיקייה נכשלה');
+    vis.fid=j2.id;
+  }
+  try{ LS.setItem('bagrutVisFolder',vis.fid); }catch(e){}
+  return vis.fid;
+}
+function visFileName(){
+  const d=new Date(), p=n=>('0'+n).slice(-2);
+  return 'גיבוי '+d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+p(d.getMinutes())+'.json';
+}
+async function visBackup(manual){
+  if(!dv.on||!driveEnabled()){ if(manual) alert('קודם התחבר לגוגל דרייב'); return false; }
+  if(vis.busy) return false;
+  vis.busy=true; vis.err=''; if(manual) renderKeepScroll();
+  try{
+    const fid=await visFolder();
+    const obj=fullBackupObject();                        // אותו מבנה בדיוק כמו "💾 גיבוי"
+    const body=JSON.stringify(obj);
+    const meta={name:visFileName(),parents:[fid],mimeType:'application/json',
+      description:'גיבוי אוטומטי של סימולטור בגרות · '+
+        Object.keys(obj.data||{}).length+' סימולטורים · '+
+        Object.values(obj.data||{}).reduce((a,x)=>a+((x&&x.students||[]).length),0)+' תלמידות'};
+    const bnd='-------bagrutvis'+Date.now();
+    const mp='--'+bnd+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+
+      '\r\n--'+bnd+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+body+'\r\n--'+bnd+'--';
+    const r=await dvFetch(DRIVE_UP+'/files?uploadType=multipart&fields=id,name,webViewLink',
+      {method:'POST',headers:{'Content-Type':'multipart/related; boundary='+bnd},body:mp});
+    const j=await r.json();
+    if(!j.id) throw new Error('ההעלאה נכשלה');
+    vis.last=Date.now();
+    try{ LS.setItem('bagrutVisLast',String(vis.last)); }catch(e){}
+    await visPrune();
+    if(manual){ toast('נשמר גיבוי גלוי בדרייב: '+meta.name); renderKeepScroll(); }
+    return true;
+  }catch(e){
+    vis.err=e.message;
+    // טוקן ישן שהונפק לפני שההרשאה התווספה — צריך אישור מחדש, ולא סתם "נכשל"
+    if(/403|insufficient|scope/i.test(e.message||'')) vis.err='נדרש אישור מחדש של ההרשאה בגוגל';
+    if(manual) alert('הגיבוי הגלוי נכשל: '+vis.err+
+      (/אישור מחדש/.test(vis.err)?'\n\nלחץ "ניתוק החשבון" ואז "חיבור לגוגל דרייב" — ואשר את ההרשאה החדשה.':''));
+    return false;
+  }finally{ vis.busy=false; if(manual) renderKeepScroll(); }
+}
+/* שומרים היסטוריה, אבל לא בלי גבול */
+async function visPrune(){
+  try{
+    const q=encodeURIComponent(`'${vis.fid}' in parents and trashed=false`);
+    const r=await dvFetch(DRIVE_API+'/files?q='+q+'&fields=files(id,name,createdTime)&orderBy=createdTime desc&pageSize=100');
+    const j=await r.json();
+    const f=(j.files||[]);
+    for(let i=VIS_KEEP;i<f.length;i++){
+      try{ await dvFetch(DRIVE_API+'/files/'+f[i].id,{method:'DELETE'}); }catch(e){}
+    }
+  }catch(e){}
+}
+/* אחרי סנכרון מוצלח, פעם ביום — בלי להעמיס ובלי לבקש כלום */
+async function visAuto(){
+  if(!visEnabled()||!dv.on) return;
+  if(Date.now()-vis.last < 20*3600*1000) return;
+  await visBackup(false);
+}
+function visOpen(){
+  if(!vis.fid){ alert('טרם נוצרה תיקייה. לחץ "גיבוי לדרייב עכשיו".'); return; }
+  window.open('https://drive.google.com/drive/folders/'+vis.fid,'_blank','noopener');
+}
+function visPanelHtml(){
+  if(!dv.on) return '';
+  const on=visEnabled();
+  const t=vis.last?new Date(vis.last).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'טרם';
+  return `<div class="gRow" style="margin-top:10px;">
+      <label>גיבוי גלוי בדרייב</label>
+      <label style="display:flex; align-items:center; gap:7px; font-weight:700; margin:0; color:var(--ink);">
+        <input type="checkbox" ${on?'checked':''} onchange="visToggle(this.checked)" style="width:auto;"> מופעל</label>
+    </div>
+    <div class="toolbar" style="margin-top:6px;">
+      <button class="btn sec sm" onclick="visBackup(true)" ${vis.busy?'disabled':''}>${ic('save',13)}${vis.busy?'שומר…':'גיבוי לדרייב עכשיו'}</button>
+      ${vis.fid?`<button class="btn sec sm" onclick="visOpen()">${ic('folder',13)}פתיחת התיקייה בדרייב</button>`:''}
+    </div>
+    <div class="note">נוצרת תיקייה רגילה בשם <b>${esc(VIS_FOLDER)}</b> ב"הדרייב שלי" — <b>נראית, ניתנת לפתיחה, להורדה ולשיתוף</b>.
+      נשמרים ${VIS_KEEP} הגיבויים האחרונים, אחד ליום. גיבוי אחרון: <b>${esc(t)}</b>.
+      ${vis.err?`<span class="g-red"> · ${esc(vis.err)}</span>`:''}</div>`;
+}
+/* ══ "מה יש בדרייב?" ══
+   התיקייה מוסתרת לחלוטין בממשק של גוגל — אי אפשר לפתוח אותה, לחפש בה או לשתף
+   ממנה. האפליקציה היא היחידה שיכולה לקרוא משם, ולכן זה המקום היחיד שבו אפשר
+   לראות מה באמת יושב שם, ולהוריד את זה לקובץ שאפשר להחזיק ביד. */
+let peek={rows:null,err:'',busy:false};
+async function drivePeek(){
+  if(!dv.on){ alert('קודם התחבר לגוגל דרייב'); return; }
+  peek={rows:null,err:'',busy:true}; renderPeek();
+  try{
+    await driveIndex();
+    const rows=[];
+    for(const pid of Object.keys(dv.files)){
+      const f=dv.files[pid];
+      let pl=null, err='';
+      try{ pl=await driveLoad(pid); }catch(e){ err=e.message; }
+      rows.push({pid, fid:f.fid, ver:f.ver, mtime:f.mtime, err,
+        name:(pl&&pl.name)||'', device:(pl&&pl.device)||'',
+        n:((pl&&pl.state&&pl.state.students)||[]).length,
+        cls:((pl&&pl.state&&pl.state.classes)||[]).length,
+        savedAt:(pl&&pl.savedAt)||'', appVer:(pl&&pl.appVer)||'',
+        bytes:pl?JSON.stringify(pl).length:0, raw:pl});
+    }
+    rows.sort((a,b)=>String(b.mtime||'').localeCompare(String(a.mtime||'')));
+    peek.rows=rows;
+  }catch(e){ peek.err=e.message; }
+  peek.busy=false; renderPeek();
+}
+function renderPeek(){
+  const box=document.getElementById('cfBox'), mod=document.getElementById('cfModal');
+  if(!box||!mod) return;
+  mod.classList.add('show');
+  if(peek.busy){ box.innerHTML='<h3 class="sec">מה יש בדרייב?</h3><div class="note">קורא מהתיקייה הנסתרת…</div>'; return; }
+  if(peek.err){ box.innerHTML=`<h3 class="sec">מה יש בדרייב?</h3>
+    <div class="alert-item al-bad"><span>${esc(peek.err)}</span></div>
+    <div class="toolbar"><button class="btn sec" onclick="document.getElementById('cfModal').classList.remove('show')">סגירה</button></div>`; return; }
+  const r=peek.rows||[];
+  const tot=r.reduce((a,x)=>a+x.n,0);
+  box.innerHTML=`<h3 class="sec">${ic('folder',17)} מה יש בדרייב?</h3>
+  <div class="note" style="margin-bottom:8px;">זו התיקייה הנסתרת של האפליקציה בחשבון הגוגל שלך.
+    <b>היא אינה נראית ב-drive.google.com</b> — זה המסך היחיד שמציג אותה.</div>
+  ${r.length?`<table class="tbl"><thead><tr><th>סימולטור</th><th>תלמידות</th><th>כיתות</th>
+    <th>גרסה</th><th>עודכן</th><th>מהמכשיר</th><th>גודל</th></tr></thead><tbody>
+    ${r.map(x=>`<tr>
+      <td><b>${esc(x.name||'(ללא שם)')}</b><div class="note">${esc(x.pid)}</div></td>
+      <td style="font-weight:800; ${x.n?'':'color:#dc2626;'}">${x.n}</td>
+      <td>${x.cls}</td>
+      <td>${x.ver}${x.appVer?`<div class="note">תוכנה ${esc(x.appVer)}</div>`:''}</td>
+      <td>${x.mtime?new Date(x.mtime).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</td>
+      <td>${esc(x.device||'—')}</td>
+      <td>${x.bytes?Math.round(x.bytes/1024)+' KB':(x.err?'<span class="g-red">שגיאה</span>':'—')}</td>
+    </tr>`).join('')}
+    </tbody></table>
+    <div class="note" style="margin-top:8px;">סה"כ <b>${tot}</b> תלמידות ב-${r.length} סימולטורים.</div>`
+   :'<div class="alert-item al-warn"><span>התיקייה בדרייב ריקה — טרם הועלה שום סימולטור.</span></div>'}
+  <div class="toolbar" style="margin-top:12px;">
+    ${r.length?`<button class="btn ok" onclick="peekDownload()">${ic('down',14)}הורדת הכול לקובץ</button>`:''}
+    <button class="btn sec" onclick="document.getElementById('cfModal').classList.remove('show')">סגירה</button>
+  </div>`;
+}
+/* מוריד בדיוק את מה שיושב בדרייב — לא את המצב המקומי. כך אפשר לראות
+   ולהחזיק עותק של הענן עצמו, גם כשהמכשיר הזה מציג משהו אחר. */
+function peekDownload(){
+  const r=(peek.rows||[]).filter(x=>x.raw);
+  if(!r.length) return;
+  const data={}, profs=[];
+  r.forEach(x=>{ data[x.pid]=x.raw.state; profs.push({id:x.pid,name:x.raw.name||''}); });
+  const obj={_type:'bagrut-backup',_at:new Date().toISOString(),_from:'drive',
+    profiles:profs,current:(profs[0]||{}).id||'main',data};
+  const b=new Blob([JSON.stringify(obj)],{type:'application/json'});
+  const u=URL.createObjectURL(b), a=document.createElement('a');
+  a.href=u; a.download='גיבוי-מהדרייב-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click(); setTimeout(()=>URL.revokeObjectURL(u),1500);
+  toast('הורד עותק של מה שיושב בדרייב — '+r.reduce((s,x)=>s+x.n,0)+' תלמידות');
+}
 function drivePanelHtml(){
   const s=dvStatus();
   const last=+(LS.getItem('bagrutDvLast')||0);
@@ -7915,6 +8109,7 @@ function drivePanelHtml(){
   return `<div class="toolbar" style="margin-bottom:6px;">
     <span class="badge ${s==='synced'?'b-ok':s==='error'?'b-bad':'b-warn'}">${(DVS[s]||{}).t||''}</span>
     ${dv.on?`<button class="btn sm" onclick="driveSyncAll()">${ic('refresh',13)}סנכרן עכשיו</button>
+      <button class="btn sec sm" onclick="drivePeek()">${ic('folder',13)}מה יש בדרייב?</button>
       <button class="btn sec sm" onclick="driveDiag()">${ic('info',13)}דוח אבחון</button>
       <button class="btn dz sm" onclick="driveDisconnect()">${ic('x',13)}ניתוק החשבון</button>`
      :`<button class="btn ok sm" onclick="driveConnect()">${ic('folder',13)}חיבור לגוגל דרייב</button>`}
@@ -7924,7 +8119,14 @@ function drivePanelHtml(){
       ? `סנכרון אחרון: ${esc(lastTxt)}${qn?` · <b>${qn} ממתינים</b>`:''}${dv.lastErr?` · <span class="g-red">${esc(dv.lastErr)}</span>`:''}`
       : `טרם התחברת. הנתונים שמורים במכשיר הזה, והחיבור יעלה אותם לדרייב הפרטי שלך.`}<br>
     הנתונים נשמרים בתיקייה <b>נסתרת של האפליקציה</b> בדרייב שלך. לתוכנה אין גישה לשום קובץ אחר, ולספק אין גישה כלל.
-    שכבת הסימולציה, הלוגו ונקודות השמירה נשארים מקומיים ואינם מסתנכרנים.</div>`;
+    שכבת הסימולציה, הלוגו ונקודות השמירה נשארים מקומיים ואינם מסתנכרנים.</div>
+  ${visPanelHtml()}
+  <div class="alert-item al-warn" style="margin-top:8px;">
+    <span>${ic('warn',15)}</span>
+    <span><b>תיקיית הסנכרון עצמה לא נמצאת ב-drive.google.com.</b> כך גוגל בנתה אותה: היא מוסתרת מהמשתמש,
+    לא ניתנת לחיפוש, לא ניתנת לשיתוף, ו<b>נמחקת אם מסירים את הרשאת האפליקציה מחשבון הגוגל</b>.
+    <b>הגיבוי הגלוי שלמעלה הוא התשובה לזה</b> — הוא יושב ב"הדרייב שלי" כקובץ רגיל לכל דבר.
+    כדי לראות מה יושב בתיקיית הסנכרון עצמה — "מה יש בדרייב?".</span></div>`;
 }
 
 /* ============ מצב שמירה ============ */
