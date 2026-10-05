@@ -6454,6 +6454,19 @@ async function exportStyled(cls,studs,sumRows,rawRows,anRows,fname){
                 'פוטנציאל':s('פוטנציאל'),'עם מעכבים':s('עם מעכבים'),
                 'ממוצע':av.length?Math.round(avgOf(av)*10)/10:''}; })() }
   ];
+  /* ── גיליון הערות ──
+     ההערות היו רק בדוח המודפס. ב"נתונים גולמיים" הופיעה רק ההערה הכללית של
+     המקצוע, כעמודה — והערה על רכיב ספציפי ("נעדרה — מועד ב׳") לא יצאה כלל,
+     למרות שהמדריך הבטיח שהיא באקסל. כאן היא יוצאת, שורה לכל הערה. */
+  const noteRows=allNotes(studs).map(x=>({
+    [gx('שם')]:x.st.name, [gx('כיתה')]:x.st.cls||'', 'מקצוע · רכיב':x.label, 'ההערה':x.txt }));
+  if(noteRows.length) specs.push({
+    name:'הערות',
+    title:`הערות · ${cls||'כל השכבה'} · ${when}`,
+    cols:[{h:gx('שם'),k:gx('שם'),w:20},{h:gx('כיתה'),k:gx('כיתה'),w:10,align:'center'},
+          {h:'מקצוע · רכיב',k:'מקצוע · רכיב',w:28},{h:'ההערה',k:'ההערה',w:62,wrap:true}],
+    rows:noteRows,
+    totals:(()=>{ const t={}; t[gx('שם')]='סה"כ '+noteRows.length+' הערות'; return t; })() });
   await writeStyledXlsx(specs,fname);
 }
 /* ═══════════════════════════════════════════════════════════════
@@ -7123,7 +7136,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='15.6';
+const APP_VERSION='15.7';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
