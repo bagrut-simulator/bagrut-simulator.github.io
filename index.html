@@ -2346,14 +2346,26 @@ function activateLic(){
   licName=nn; licKey=kk;
   try{ LS.setItem('bagrutLicName',nn); LS.setItem('bagrutLicKey',kk); }catch(e){}
   if(!schoolName) setSchoolName(nn);
-  licRefresh(); render();
+  licRefresh(); render(); licPush();
   alert('✅ הרישיון הופעל עבור: '+nn+'\n\nבתוקף עד סוף '+licExpText()+'.');
+}
+/* ── הרישיון חייב לנסוע לדרייב גם כשהציונים לא זזו ──
+   הרישיון נכלל בחבילת הסנכרון (כדי שלא יידרש להקליד אותו בכל מכשיר), אבל
+   חתימת החבילה מגובבת רק מתוך pl.state. כלומר: הפעלת רישיון בלי שום שינוי
+   בציונים לא נחשבה "שינוי אמיתי", וההעלאה נדלגה — והקוד החדש נשאר תקוע
+   במכשיר אחד. force=true עוקף את בדיקת החתימה. */
+function licPush(){
+  try{
+    if(typeof dv==='undefined'||!dv.on||!driveEnabled()) return;
+    markDirty(currentProfileId);
+    Promise.resolve(driveSave(currentProfileId,true)).catch(()=>{});
+  }catch(e){}
 }
 function removeLic(){
   if(!confirm('להסיר את הרישיון מהמכשיר הזה?')) return;
   licName=''; licKey='';
   try{ LS.removeItem('bagrutLicName'); LS.removeItem('bagrutLicKey'); }catch(e){}
-  render();
+  render(); licPush();     // שההסרה לא "תתבטל" בסנכרון הבא מהדרייב
 }
 function licBanner(){
   if(isLicensed()) return '';
@@ -6777,6 +6789,7 @@ function importJSON(input){
         const names=(d.profiles||[]).map(p=>p.name||'(ללא שם)').join(', ');
         if(!confirm(`שחזור גיבוי מלא\n\nתאריך הגיבוי: ${when}\nסימולטורים: ${names}\nסך תלמידות: ${tot}\n\n⚠️ הנתונים הקיימים במכשיר זה יוחלפו. להמשיך?`)){ input.value=''; return; }
         pushUndo('שחזור מגיבוי');
+        markRestored(tot,d._at);
         (d.profiles||[]).forEach(pr=>{
           const key=pr.id==='main'?'bagrutSimPro':'bagrutSimPro:'+pr.id;
           if(d.data[pr.id]) LS.setItem(key,JSON.stringify(d.data[pr.id]));
@@ -6792,6 +6805,7 @@ function importJSON(input){
         const n=((d&&d.students)||[]).length;
         if(!confirm(`שחזור גיבוי לסימולטור הנוכחי\n\nתלמידות בקובץ: ${n}\n\n⚠️ הנתונים בסימולטור הנוכחי יוחלפו. להמשיך?`)){ input.value=''; return; }
         pushUndo('שחזור מגיבוי');
+        markRestored(n,d._at);
         state=withDefaults(d);                    // ולא Object.assign שטוח: ספים חסרים היו הופכים ל-undefined
         save(); render(); toast(`שוחזרו ${n} תלמידות`);
       }
@@ -7087,7 +7101,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='15.0';
+const APP_VERSION='15.3';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -7217,7 +7231,7 @@ const VIS_KEEP=12;                     // כמה גיבויים מתוארכים
 const DRIVE_API='https://www.googleapis.com/drive/v3';
 const DRIVE_UP='https://www.googleapis.com/upload/drive/v3';
 
-let dv={ on:false, token:'', exp:0, email:'', state:'nodrive', busy:false,
+let dv={ on:false, token:'', exp:0, email:(function(){ try{ return LS.getItem('bagrutDvEmail')||''; }catch(e){ return ''; } })(), state:'nodrive', busy:false,
          lastSync:0, lastErr:'', files:{}, queue:{}, sig:{}, tc:null, gisLoaded:false };
 
 function driveEnabled(){ return !!DRIVE_CLIENT_ID; }
@@ -7287,11 +7301,14 @@ async function driveConnect(){
         SS.setItem('bagrutDvTok',dv.token); SS.setItem('bagrutDvExp',String(dv.exp));
         LS.setItem('bagrutDvWanted','1');
         dv.state='saving'; renderKeepScroll();
+        try{ await driveWhoAmI(); }catch(e){}       // כדי שיהיה כתוב על המסך לאיזה חשבון התחברת
         await driveSyncAll(true);
       }else{ dv.state='error'; dv.lastErr='ההרשאה לא אושרה'; renderKeepScroll(); }
     }
   });
-  dv.tc.requestAccessToken({prompt:'consent'});
+  /* select_account הוא מה שמציג את בורר החשבונות. עם 'consent' לבדו גוגל
+     מאשרת מחדש את החשבון שכבר מחובר בדפדפן, ואי אפשר לעבור לחשבון אחר. */
+  dv.tc.requestAccessToken({prompt:'select_account consent'});
 }
 async function driveSilent(){
   if(!driveEnabled()||LS.getItem('bagrutDvWanted')!=='1') return false;
@@ -7313,11 +7330,31 @@ async function driveSilent(){
   });
 }
 function driveDisconnect(){
-  if(!confirm('לנתק את החשבון מהמכשיר הזה?\n\nהנתונים בדרייב ובמכשיר לא יימחקו.\nהתוכנה תמשיך לעבוד מקומית, בלי סנכרון.')) return;
+  if(!confirm('לנתק את חשבון הגוגל מהמכשיר הזה?'+
+    (dv.email?'\n\nמחובר כעת: '+dv.email:'')+
+    '\n\nהנתונים בדרייב ובמכשיר לא יימחקו.'+
+    '\nבחיבור הבא תוכל לבחור חשבון גוגל אחר.')) return;
   try{ if(window.google&&google.accounts&&dv.token) google.accounts.oauth2.revoke(dv.token,()=>{}); }catch(e){}
-  dv={...dv,on:false,token:'',exp:0,email:'',state:'nodrive',files:{},queue:{},sig:{}};
-  SS.removeItem('bagrutDvTok'); SS.removeItem('bagrutDvExp'); LS.removeItem('bagrutDvWanted');
+  dv={...dv,on:false,token:'',exp:0,email:'',state:'nodrive',files:{},queue:{},sig:{},blocked:null,allowEmpty:{}};
+  SS.removeItem('bagrutDvTok'); SS.removeItem('bagrutDvExp');
+  LS.removeItem('bagrutDvWanted'); LS.removeItem('bagrutDvEmail');
+  /* שאריות של החשבון הקודם: מזהה תיקיית הגיבוי שייך לדרייב שהתנתקנו ממנו,
+     ומספרי הגרסה מתארים קבצים שכבר לא נגישים. בלי ניקוי, חיבור לחשבון אחר
+     היה מנסה לכתוב לתיקייה של מישהו אחר. */
+  vis.fid=''; vis.last=0; LS.removeItem('bagrutVisFolder'); LS.removeItem('bagrutVisLast');
+  try{ profiles.forEach(pr=>LS.removeItem('bagrutDvVer:'+pr.id)); }catch(e){}
   renderKeepScroll(); toast('נותק מהדרייב — הנתונים לא נמחקו');
+}
+/* שואל את הדרייב מי המשתמש. עובד עם ההרשאות שכבר יש לנו — בלי להוסיף
+   הרשאת פרופיל. בלי זה אי אפשר לדעת מהמסך לאיזה חשבון גוגל התחברת. */
+async function driveWhoAmI(){
+  try{
+    const r=await dvFetch(DRIVE_API+'/about?fields=user(emailAddress,displayName)');
+    const j=await r.json();
+    dv.email=((j||{}).user||{}).emailAddress||'';
+    if(dv.email){ try{ LS.setItem('bagrutDvEmail',dv.email); }catch(e){} }
+  }catch(e){ dv.email=''; }
+  return dv.email;
 }
 async function driveTok(){
   if(dv.exp>Date.now()&&dv.token) return dv.token;
@@ -7489,7 +7526,26 @@ async function driveSyncAll(initial){
       const st=(pr.id===currentProfileId)?state:loadProfileState(pr.id);
       if(st&&(st.students||[]).length) markDirty(pr.id);
     });
+    /* שחזור ממתין — מחליטים עליו לפני כל שאר ההיגיון */
+    const _rst=restoredPending();
+    if(_rst&&dv.files[_rst.pid]){
+      const pick=await restoreDecide(_rst);
+      if(pick==='mine'){                                   // הגיבוי מנצח — נכתב על הדרייב
+        allowEmptySync(_rst.pid); markDirty(_rst.pid);
+        setLocalVer(_rst.pid,dv.files[_rst.pid].ver);      // כדי שההעלאה לא תיחשב "מישהו הקדים"
+        await driveSave(_rst.pid,true);
+        conf[_rst.pid]=true;
+      }else if(pick==='theirs'){                           // הדרייב מנצח — השחזור מבוטל
+        pushUndo('ביטול שחזור — הורדה מהדרייב');
+        clearDirty(_rst.pid);
+        const pl=await driveLoad(_rst.pid);
+        if(pl) driveApplyRemote(_rst.pid,pl,dv.files[_rst.pid].ver);
+        conf[_rst.pid]=true;
+      }
+      // 'merge' / 'none' — ממשיכים כרגיל
+    }
     for(const pid of Object.keys(dv.files)){
+      if(conf[pid]) continue;
       const rv=dv.files[pid].ver, lv=localVer(pid);
       const dirty=!!dv.queue[pid];
       if(rv>lv&&!dirty){                                                        // הדרייב חדש והמקומי נקי
@@ -7912,6 +7968,61 @@ function driveInfoDlg(){
     'עד שהוא יוגדר, התוכנה עובדת בדיוק כמו קודם: הנתונים נשמרים בדפדפן של המכשיר הזה, והגיבוי לקובץ פועל כרגיל.\n\n'+
     'חשוב לדעת: גם אחרי ההגדרה, הנתונים נשמרים בחשבון הדרייב שלך בתיקייה נסתרת של האפליקציה. ספק התוכנה אינו מחזיק ואינו רואה אותם.');
 }
+/* ══ שחזור גיבוי מול הדרייב ══
+   בלי זה קרה הדבר הבא, בשקט: משחזרים גיבוי של 15 תלמידות, מתחברים לדרייב
+   שבו 20 — והמיזוג מחזיר את 5 התלמידות שלא היו בגיבוי, אבל לוקח את הציונים
+   מהגיבוי. התוצאה אינה הגיבוי ואינה הדרייב, ואף אחד לא נשאל.
+   שחזור גיבוי הוא הצהרה: "זה המצב הנכון". לכן נשאלת שאלה אחת, במפורש. */
+function markRestored(n,at){
+  try{ LS.setItem('bagrutRestored',JSON.stringify({pid:currentProfileId,n:n||0,at:at||'',when:Date.now()})); }catch(e){}
+}
+function restoredPending(){
+  try{ const r=JSON.parse(LS.getItem('bagrutRestored')||'null');
+       if(!r||!r.pid) return null;
+       if(Date.now()-(r.when||0)>7*86400000){ LS.removeItem('bagrutRestored'); return null; }   // ישן מדי — לא רלוונטי
+       return r; }catch(e){ return null; }
+}
+function clearRestored(){ try{ LS.removeItem('bagrutRestored'); }catch(e){} }
+let rst={info:null,remote:null,resolve:null};
+async function restoreDecide(info){
+  const pid=info.pid;
+  let pl=null;
+  try{ pl=await driveLoad(pid); }catch(e){}
+  if(!pl||!pl.state){ clearRestored(); return 'none'; }
+  const nRemote=((pl.state.students)||[]).length;
+  const cur=(pid===currentProfileId)?state:loadProfileState(pid);
+  const nLocal=((cur&&cur.students)||[]).length;
+  if(nRemote===0){ clearRestored(); return 'none'; }                 // אין מה להשוות
+  /* קודם מחברים את ההבטחה ורק אז מציירים. בסדר ההפוך, לחיצה שמגיעה באותו
+     תור־ביצוע שבו נוצר החלון לא מוצאת למי לענות — וההמתנה נתקעת לנצח. */
+  return await new Promise(res=>{
+    rst={info,remote:pl,resolve:res};
+    renderRestoreDlg(nLocal,nRemote);
+  });
+}
+function renderRestoreDlg(nLocal,nRemote){
+  const box=document.getElementById('cfBox'), mod=document.getElementById('cfModal');
+  if(!box||!mod){ if(rst.resolve) rst.resolve('merge'); return; }
+  const when=rst.info.at?new Date(rst.info.at).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'לא ידוע';
+  box.innerHTML=`<h3 class="sec">${ic('refresh',17)} שחזרת גיבוי — מה הנכון?</h3>
+  <div class="note" style="margin-bottom:10px;">שחזרת גיבוי מ-<b>${esc(when)}</b>, ובדרייב יש נתונים אחרים.
+    צריך להחליט מה המצב הנכון — אחרת המיזוג ייתן תוצאה שאינה זה ואינה זה.</div>
+  <table class="tbl"><tr><th>הגיבוי ששחזרת</th><td><b>${nLocal}</b> תלמידות</td></tr>
+    <tr><th>מה שיש בדרייב</th><td><b>${nRemote}</b> תלמידות</td></tr></table>
+  <div class="toolbar" style="margin-top:14px; flex-direction:column; align-items:stretch; gap:8px;">
+    <button class="btn ok" onclick="restorePick('mine')">${ic('check',14)} הגיבוי הוא הנכון — להחליף את מה שבדרייב</button>
+    <button class="btn sec" onclick="restorePick('theirs')">${ic('down',14)} הדרייב הוא הנכון — לבטל את השחזור ולהוריד משם</button>
+    <button class="btn sec" onclick="restorePick('merge')">${ic('layers',14)} למזג את שניהם</button>
+  </div>
+  <div class="note" style="margin-top:8px;">אפשר תמיד לחזור אחורה: "💾 גיבוי" שומר קובץ לפני כל שינוי גדול.</div>`;
+  mod.classList.add('show');
+}
+function restorePick(which){
+  const el=document.getElementById('cfModal'); if(el) el.classList.remove('show');
+  clearRestored();
+  const r=rst.resolve; rst.resolve=null;
+  if(r) r(which);
+}
 /* ══════════ גיבוי גלוי בדרייב ══════════
    התיקייה הנסתרת (appDataFolder) היא מצוינת לסנכרון אבל אי אפשר לראות אותה.
    כאן נוצרת תיקייה רגילה ב"הדרייב שלי" עם קבצי גיבוי מתוארכים — נראים, ניתנים
@@ -8108,11 +8219,13 @@ function drivePanelHtml(){
   const qn=Object.keys(dv.queue).length;
   return `<div class="toolbar" style="margin-bottom:6px;">
     <span class="badge ${s==='synced'?'b-ok':s==='error'?'b-bad':'b-warn'}">${(DVS[s]||{}).t||''}</span>
+    ${dv.on&&dv.email?`<span class="pill" title="חשבון הגוגל שאליו התוכנה מחוברת כעת" style="background:#eef7f1; border-color:#cfe8db; color:#0f5132; font-weight:700;">${ic('avatar',13)} ${esc(dv.email)}</span>`:''}
     ${dv.on?`<button class="btn sm" onclick="driveSyncAll()">${ic('refresh',13)}סנכרן עכשיו</button>
       <button class="btn sec sm" onclick="drivePeek()">${ic('folder',13)}מה יש בדרייב?</button>
       <button class="btn sec sm" onclick="driveDiag()">${ic('info',13)}דוח אבחון</button>
       <button class="btn dz sm" onclick="driveDisconnect()">${ic('x',13)}ניתוק החשבון</button>`
-     :`<button class="btn ok sm" onclick="driveConnect()">${ic('folder',13)}חיבור לגוגל דרייב</button>`}
+     :`<button class="btn ok sm" onclick="driveConnect()">${ic('folder',13)}חיבור לגוגל דרייב</button>
+        <span class="note">תוכל לבחור באיזה חשבון גוגל להשתמש</span>`}
   </div>
   <div class="gRow"><label>שם המכשיר</label><input type="text" value="${esc(driveName())}" onchange="setDriveName(this.value)"></div>
   <div class="note">${dv.on
