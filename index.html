@@ -2087,7 +2087,16 @@ function renameProfile(){
 function deleteProfile(){
   if(profiles.length<=1){ toast('חייב להישאר לפחות סימולטור אחד'); return; }
   const p=profiles.find(x=>x.id===currentProfileId);
-  if(!confirm(`למחוק לצמיתות את הסימולטור "${p.name}" על כל הנתונים שבו?`)) return;
+  const nSt=(state.students||[]).length;
+  if(!confirm(`למחוק לצמיתות את הסימולטור "${p.name}"?\n\nיימחקו ${nSt} תלמידות ו-${(state.classes||[]).length} כיתות.`)) return;
+  /* מחיקת שנתון שלם היא הפעולה ההרסנית ביותר בתוכנה, והייתה מאחורי אישור אחד
+     בלבד — בלי נקודת שחזור ובלי ביטול. עכשיו שומרים לפני, ובשנתון עם תלמידות
+     נדרש אישור שני. */
+  if(nSt>0){
+    try{ autoSnapshot(); }catch(e){}
+    try{ pushUndo('מחיקת הסימולטור "'+(p.name||'ללא שם')+'" ('+nSt+' תלמידות)'); }catch(e){}
+    if(!confirm(`אישור אחרון — ${nSt} תלמידות.\n\nמומלץ ללחוץ "ביטול" ולעשות 💾 גיבוי קודם.\n\nלמחוק בכל זאת?`)) return;
+  }
   LS.removeItem(profileKey());
   profiles=profiles.filter(x=>x.id!==currentProfileId);
   currentProfileId=profiles[0].id; saveProfiles();
@@ -2562,7 +2571,19 @@ function openVerify(){
   document.getElementById('vfModal').classList.add('show');
   renderVerify();
 }
-function closeVerify(){ document.getElementById('vfModal').classList.remove('show'); }
+/* ══ הציון האחרון שהוקלד ══
+   השדות נשמרים ב-onchange, שנורה רק כששדה מאבד מיקוד. סגירה שעוברת דרך
+   לחיצה בעמוד (X · רקע · "שמירה וסגירה") מבלרת מעצמה — ולכן נשמר. אבל סגירה
+   שלא עוברת דרך לחיצה — כפתור "חזור" של אנדרואיד, או Escape — השאירה את
+   המיקוד בשדה, onchange לא נורה, והציון שהוקלד זה עתה אבד.
+   כאן מוציאים את המיקוד לפני כל סגירה. */
+function flushActive(){
+  try{
+    const ae=document.activeElement;
+    if(ae&&typeof ae.blur==='function'&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName||'')) ae.blur();
+  }catch(e){}
+}
+function closeVerify(){ flushActive(); document.getElementById('vfModal').classList.remove('show'); }
 function renderVerify(){
   const st=state.students.find(s=>s.id===vf.id)||state.students[0];
   if(!st) return;
@@ -2685,7 +2706,7 @@ function openNote(id,key,label){
     </div>`;
   setTimeout(()=>{ const t=document.getElementById('ndText'); if(t) t.focus(); },100);
 }
-function closeNote(){ document.getElementById('ndModal').classList.remove('show'); refreshOpenViews(nd.id); }
+function closeNote(){ flushActive(); document.getElementById('ndModal').classList.remove('show'); refreshOpenViews(nd.id); }
 function saveNote(){
   const st=state.students.find(s=>s.id===nd.id); if(!st) return;
   const v=(document.getElementById('ndText')||{}).value||'';
@@ -2946,7 +2967,7 @@ function openTestsDlg(id,sid){
   document.getElementById('tdModal').classList.add('show');
   renderTestsDlg();
 }
-function closeTestsDlg(){ document.getElementById('tdModal').classList.remove('show'); renderKeepScroll(); }
+function closeTestsDlg(){ flushActive(); document.getElementById('tdModal').classList.remove('show'); renderKeepScroll(); }
 function renderTestsDlg(){
   const st=state.students.find(s=>s.id===td.id); if(!st) return;
   const subj=SUBJ_MAP[td.sid]||SUBJECTS[0];
@@ -4421,6 +4442,7 @@ function refreshOpenViews(id,full){
   else if(currentTab==='entry'&&full) render();
 }
 function closeStudent(){
+  flushActive();
   document.getElementById('studentModal').classList.remove('show');
   render();
 }
@@ -4852,7 +4874,7 @@ function openGradeImport(){
   renderGradeImport();
   document.getElementById('giModal').classList.add('show');
 }
-function closeGradeImport(){ document.getElementById('giModal').classList.remove('show'); render(); }
+function closeGradeImport(){ flushActive(); document.getElementById('giModal').classList.remove('show'); render(); }
 function giCompOptions(){
   const subj=SUBJ_MAP[gi.subj]||SUBJECTS[0];
   const u=subj.opts[subj.opts.length-1];
@@ -7101,7 +7123,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='15.3';
+const APP_VERSION='15.6';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -7626,6 +7648,16 @@ function driveApplyRemote(pid,pl,rv){
   if(pl&&pl.state) pl.state=withDefaults(pl.state);        // גם קובץ מגרסה ישנה בדרייב
   driveRegisterProfile(pid,pl);                             // חובה לפני הכתיבה: בלי רשומת פרופיל הנתונים בלתי נגישים
   const cur=(pid===currentProfileId)?state:loadProfileState(pid);
+  /* ══ רשת ביטחון לפני דריסה מהדרייב ══
+     שומר הסף הקיים תפס רק קובץ *ריק*. אבל דרייב עם 3 תלמידות מול מכשיר עם 40
+     דרס את ה-40 בשקט, בלי נקודת שחזור ובלי ביטול. כל ירידה במספר התלמידות
+     שומרת עכשיו נקודת שחזור ונרשמת ב"ביטול פעולה" — לפני הכתיבה, לא אחריה. */
+  const nBefore=((cur&&cur.students)||[]).length;
+  const nAfter=((pl&&pl.state&&pl.state.students)||[]).length;
+  if(nBefore>0&&nAfter<nBefore&&pid===currentProfileId){
+    try{ autoSnapshot(); }catch(e){}
+    try{ pushUndo('הורדה מהדרייב ('+nBefore+'←'+nAfter+' תלמידות)'); }catch(e){}
+  }
   const sigBefore=payloadSig({state:cur||{}});
   const merged=applyPayload(cur,pl);
   /* האם באמת הגיע שינוי? בלי זה אי אפשר לדעת אם צריך לצייר את המסך מחדש —
@@ -8231,15 +8263,10 @@ function drivePanelHtml(){
   <div class="note">${dv.on
       ? `סנכרון אחרון: ${esc(lastTxt)}${qn?` · <b>${qn} ממתינים</b>`:''}${dv.lastErr?` · <span class="g-red">${esc(dv.lastErr)}</span>`:''}`
       : `טרם התחברת. הנתונים שמורים במכשיר הזה, והחיבור יעלה אותם לדרייב הפרטי שלך.`}<br>
-    הנתונים נשמרים בתיקייה <b>נסתרת של האפליקציה</b> בדרייב שלך. לתוכנה אין גישה לשום קובץ אחר, ולספק אין גישה כלל.
+    הנתונים נשמרים בתיקייה <b>נסתרת של האפליקציה</b> בדרייב שלך — לתוכנה אין גישה לשום קובץ אחר, ולספק אין גישה כלל.
+    התיקייה הזו <b>נמחקת אם מסירים את הרשאת האפליקציה</b> מחשבון הגוגל, ולכן כדאי להשאיר את הגיבוי הגלוי מופעל.
     שכבת הסימולציה, הלוגו ונקודות השמירה נשארים מקומיים ואינם מסתנכרנים.</div>
-  ${visPanelHtml()}
-  <div class="alert-item al-warn" style="margin-top:8px;">
-    <span>${ic('warn',15)}</span>
-    <span><b>תיקיית הסנכרון עצמה לא נמצאת ב-drive.google.com.</b> כך גוגל בנתה אותה: היא מוסתרת מהמשתמש,
-    לא ניתנת לחיפוש, לא ניתנת לשיתוף, ו<b>נמחקת אם מסירים את הרשאת האפליקציה מחשבון הגוגל</b>.
-    <b>הגיבוי הגלוי שלמעלה הוא התשובה לזה</b> — הוא יושב ב"הדרייב שלי" כקובץ רגיל לכל דבר.
-    כדי לראות מה יושב בתיקיית הסנכרון עצמה — "מה יש בדרייב?".</span></div>`;
+  ${visPanelHtml()}`;
 }
 
 /* ============ מצב שמירה ============ */
@@ -8599,6 +8626,7 @@ function backAnyOpen(){
 }
 function backCloseTop(){
   const m=backAnyOpen(); if(!m) return false;
+  flushActive();                     // "חזור" לא מבלר שדה — בלי זה הציון האחרון אובד
   const fn=m[1];
   if(fn&&typeof window[fn]==='function'){ try{ window[fn](); }catch(e){ const el=document.getElementById(m[0]); if(el) el.classList.remove('show'); } }
   else { const el=document.getElementById(m[0]); if(el) el.classList.remove('show'); }
