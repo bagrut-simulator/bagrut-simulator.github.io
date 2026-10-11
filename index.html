@@ -3046,8 +3046,13 @@ function predOffset(sid){
 
 /* ============ מנוע חישוב ============ */
 function getUnits(st,subj){
-  if(subj.opts.length===1) return subj.opts[0];
   const u=(st.units||{})[subj.id];
+  /* ביטול מפורש גובר תמיד — גם במקצוע עם אפשרות יחידות אחת.
+     בלי זה לשון, היסטוריה, ספרות, מחשבת ואזרחות היו פעילים בכפייה: בית ספר
+     שאינו מלמד מחשבת ישראל לא יכול היה להגיע ל"זכאית" לעולם, כי המקצוע
+     תמיד נספר כחסר. */
+  if(u===0) return 0;
+  if(subj.opts.length===1) return subj.opts[0];
   if(u===0||u) return u;
   // לא הוזן מספר יחידות. במקצוע מוגבר/התמחות ברירת המחדל היא "לא לומדת" —
   // אחרת תלמידה שנוספה ידנית נחשבת ל-5 יח"ל מוגבר בלי שם מקצוע ובלי ציונים,
@@ -4259,7 +4264,9 @@ function studentSubjEditor(st,subj){
   const isSim=(typeof stMode!=='undefined'&&stMode==='sim');
   const u=getUnits(st,subj);
   const r=calcSubject(st,subj,isSim?{sim:true}:undefined);
-  const unitsSel=subj.opts.length>1?`<select onchange="setUnits('${st.id}','${subj.id}',this.value)">${subj.opts.map(o=>`<option value="${o}" ${o===u?'selected':''}>${o===0?'לא נלמד':o+' יח"ל'}</option>`).join('')}</select>`:`<span class="pill">${u} יח"ל</span>`;
+  /* גם מקצוע עם אפשרות אחת מקבל בורר — כדי שאפשר יהיה לסמן "לא נלמד" */
+  const uOpts=subj.opts.indexOf(0)>-1?subj.opts:[0].concat(subj.opts);
+  const unitsSel=`<select onchange="setUnits('${st.id}','${subj.id}',this.value)">${uOpts.map(o=>`<option value="${o}" ${o===u?'selected':''}>${o===0?'לא נלמד':o+' יח"ל'}</option>`).join('')}</select>`;
   const nameInput=subj.named?`<input type="text" style="width:130px;" placeholder="שם המקצוע" value="${esc((st.mugbarNames||{})[subj.id]||'')}" onchange="setMugbarName('${st.id}','${subj.id}',this.value)">`:'';
   const custom=hasOverrides(st,subj);
   let body='';
@@ -4867,7 +4874,8 @@ function entryGrid(subj,studs){
     const r=calcSubject(st,subj);
     const comps=u===0?[]:getCompsFor(st,subj,u);
     let tds=`<td><span class="name-link" onclick="openStudent('${st.id}')">${esc(st.name)}</span><br><small style="color:var(--muted)">${esc(st.cls)}</small></td>`;
-    if(subj.opts.length>1) tds+=`<td><select data-k="u|${st.id}|${subj.id}" onchange="setUnits('${st.id}','${subj.id}',this.value)">${subj.opts.map(o=>`<option value="${o}" ${o===u?'selected':''}>${o===0?'—':o}</option>`).join('')}</select></td>`;
+    if(subj.opts.length>1){ const uo=subj.opts.indexOf(0)>-1?subj.opts:[0].concat(subj.opts);
+      tds+=`<td><select data-k="u|${st.id}|${subj.id}" onchange="setUnits('${st.id}','${subj.id}',this.value)">${uo.map(o=>`<option value="${o}" ${o===u?'selected':''}>${o===0?'—':o}</option>`).join('')}</select></td>`; }
     if(subj.named) tds+=`<td><input type="text" data-k="n|${st.id}|${subj.id}" style="width:110px;" value="${esc((st.mugbarNames||{})[subj.id]||'')}" onchange="setMugbarName('${st.id}','${subj.id}',this.value)"></td>`;
     headComps.forEach((hc,i)=>{
       const c=comps[i];
@@ -7194,7 +7202,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='16.0';
+const APP_VERSION='16.1';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
