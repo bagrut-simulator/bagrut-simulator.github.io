@@ -3181,9 +3181,43 @@ function calcStudent(st,opts){
   else if(avg>T.excel&&unitsOk){ status='מצטיינת ⭐'; cls='b-exc'; }
   else if(avg>=T.potential&&avg<=T.excel&&unitsOk){ status='פוטנציאל הצטיינות'; cls='b-pot'; }
   else{ status='זכאית'; cls='b-ok'; }
+  /* ══════════ מסלול הצפי ══════════
+     כל הסיווגים למעלה דורשים complete — אפס ציונים חסרים בכל המקצועות.
+     באמצע השנה זה כמעט לעולם לא נכון, ולכן הדשבורד הראה 0 זכאיות, 0 מצטיינות
+     ו-0 פוטנציאל גם לשכבה שלמה עם ממוצע 77. התוכנה הייתה חסרת תועלת בדיוק
+     בחודשים שבהם היא הכי נחוצה.
+     כאן מחושב מסלול שני, על בסיס מה שכבר הוזן בלבד. הוא לעולם אינו מתיימר
+     להיות ודאי — הוא נקרא "צפי", ומוצג בנפרד מהסיווג הסופי. */
+  let pw=0, pu=0, projBlockers=[], covW=0, covTot=0;
+  SUBJECTS.forEach(subj=>{
+    const r=per[subj.id];
+    if(!r||!r.active) return;
+    if(subj.internalOnly&&!state.includeInternal) return;
+    covTot+=r.u;
+    const sc=(r.final!==null)?r.final:r.partial;      // סופי אם יש, אחרת החלקי
+    if(sc===null||sc===undefined) return;
+    covW+=r.u*((r.covered||0)/100);
+    pw+=sc*r.u; pu+=r.u;
+    // מעכב בצפי רק כשהמקצוע מכוסה מספיק — ציון בודד מתוך ארבעה לא מספיק כדי לקבוע
+    if(sc<T.pass&&(r.final!==null||(r.covered||0)>=60)) projBlockers.push(subj);
+  });
+  const projAvg=pu>0?Math.round(pw/pu*10)/10:null;
+  const coverage=covTot>0?Math.round(covW/covTot*100):0;
+  let projStatus='אין נתונים', projCls='b-miss';
+  if(projAvg!==null){
+    if(projBlockers.length){ projStatus='בסיכון · '+projBlockers.length+' מעכבים'; projCls='b-bad'; }
+    else if(projAvg>T.excel&&unitsOk){ projStatus='בדרך להצטיינות'; projCls='b-exc'; }
+    else if(projAvg>=T.potential&&unitsOk){ projStatus='בדרך לפוטנציאל'; projCls='b-pot'; }
+    else{ projStatus='בדרך לזכאות'; projCls='b-ok'; }
+  }
   return {per,avg,totalUnits,blockers,missing,borderlines,gaps,flipList,eligible,complete,status,cls,predicted,predIn,unitsOk,
           excellent: eligible&&avg>T.excel&&unitsOk,
-          potential: complete&&blockers.length===0&&avg>=T.potential&&avg<=T.excel&&unitsOk};
+          potential: complete&&blockers.length===0&&avg>=T.potential&&avg<=T.excel&&unitsOk,
+          /* צפי — על בסיס מה שהוזן */
+          projAvg, coverage, projBlockers, projStatus, projCls,
+          projEligible: projAvg!==null&&!projBlockers.length,
+          projExcellent: projAvg!==null&&!projBlockers.length&&projAvg>T.excel&&unitsOk,
+          projPotential: projAvg!==null&&!projBlockers.length&&projAvg>=T.potential&&projAvg<=T.excel&&unitsOk};
 }
 /* ── "דורשות התייחסות": שורה אחת לכל תלמידה ──
    קודם הדוח נבנה מרשימת ההתראות השטוחה, ולכן תלמידה עם שלושה מעכבים ושני פערים
@@ -3852,6 +3886,15 @@ function renderDash(m){
   const blocked=results.filter(x=>x.r.blockers.length>0).length;
   const incomplete=results.filter(x=>!x.r.complete&&x.r.blockers.length===0).length;
   const avgAll=avgOf(results.map(x=>x.r.avg).filter(v=>v!==null));
+  /* מסלול הצפי — מה אפשר לומר על סמך מה שכבר הוזן */
+  const pElig=results.filter(x=>x.r.projEligible).length;
+  const pExc=results.filter(x=>x.r.projExcellent).length;
+  const pPot=results.filter(x=>x.r.projPotential).length;
+  const pRisk=results.filter(x=>x.r.projBlockers&&x.r.projBlockers.length).length;
+  const pAvg=avgOf(results.map(x=>x.r.projAvg).filter(v=>v!==null));
+  const cov=results.length?Math.round(avgOf(results.map(x=>x.r.coverage||0))):0;
+  // כל עוד השכבה לא מלאה — המספרים הסופיים כולם אפס, והצפי הוא מה שיש לומר
+  const partialMode=(elig===0&&pElig>0)||cov<95;
   const heroSub=n?`תמונת מצב עדכנית${cls?' · '+esc(cls):' של השכבה'} · ${n} תלמידות · עדכון אחרון ${lastSaveAt?new Date(lastSaveAt).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}`
                   :'תמונת מצב עדכנית של השכבה';
   m.innerHTML=`
@@ -3885,13 +3928,28 @@ function renderDash(m){
       [`<button class="btn" onclick="dashClass='';renderKeepScroll()">${ic('arrowLeft',15)}חזרה לכל השכבה</button>`,
        `<button class="btn sec" onclick="setTab('students')">${ic('users2',15)}הוספת תלמידות</button>`])}
   </div>`:''}
+  ${n&&partialMode?`<div class="alert-item al-info" style="margin-bottom:12px;">
+    <span>${ic('info',15)}</span>
+    <span><b>הציונים עדיין חלקיים — ${cov}% מהמשקל הוזן.</b>
+    לכן המספרים כאן הם <b>צפי לפי מה שכבר הוזן</b>, ולא סיווג סופי.
+    זכאות סופית נקבעת רק כשכל הציונים במקום${elig?` — כרגע ${elig} תלמידות כבר שם`:''}.</span></div>`:''}
   ${n?`<div class="kpis">
     ${kpiCard('k1','users2',n,'תלמידות',null,cls?('כיתה '+esc(cls)):'כל השכבה')}
-    ${kpiCard('k2','shield',elig,'זכאיות',n?elig/n*100:null,n?Math.round(elig/n*100)+'% מהשכבה':'')}
-    ${kpiCard('k4','star',exc,'מצטיינות',n?exc/n*100:null,'ממוצע מעל '+state.thresholds.excel)}
-    ${kpiCard('k3','sparkles',pot,'פוטנציאל',n?pot/n*100:null,state.thresholds.potential+'–'+state.thresholds.excel)}
-    ${kpiCard('k5','warn',blocked,'עם מקצועות מעכבים',n?blocked/n*100:null,'מתחת ל-'+state.thresholds.pass)}
-    ${kpiCard('k6','chart',avgAll,'ממוצע שכבתי',avgAll,'',true)}
+    ${partialMode
+      ? kpiCard('k2','shield',pElig,'בדרך לזכאות',n?pElig/n*100:null,
+          elig?`${elig} כבר זכאיות סופית`:'צפי לפי מה שהוזן')
+      : kpiCard('k2','shield',elig,'זכאיות',n?elig/n*100:null,n?Math.round(elig/n*100)+'% מהשכבה':'')}
+    ${partialMode
+      ? kpiCard('k4','star',pExc,'בדרך להצטיינות',n?pExc/n*100:null,'ממוצע מעל '+state.thresholds.excel)
+      : kpiCard('k4','star',exc,'מצטיינות',n?exc/n*100:null,'ממוצע מעל '+state.thresholds.excel)}
+    ${partialMode
+      ? kpiCard('k3','sparkles',pPot,'בדרך לפוטנציאל',n?pPot/n*100:null,state.thresholds.potential+'–'+state.thresholds.excel)
+      : kpiCard('k3','sparkles',pot,'פוטנציאל',n?pot/n*100:null,state.thresholds.potential+'–'+state.thresholds.excel)}
+    ${partialMode
+      ? kpiCard('k5','warn',pRisk,'בסיכון',n?pRisk/n*100:null,'מתחת ל-'+state.thresholds.pass+' במה שהוזן')
+      : kpiCard('k5','warn',blocked,'עם מקצועות מעכבים',n?blocked/n*100:null,'מתחת ל-'+state.thresholds.pass)}
+    ${kpiCard('k6','chart',partialMode?pAvg:avgAll,'ממוצע שכבתי',partialMode?pAvg:avgAll,
+      partialMode?'כולל ציונים חלקיים':'',true)}
   </div>`:''}
   ${n?`<div class="card" style="margin-bottom:16px; padding:${openBoxes.rings===false?'10px 17px':'17px'};">
     <div class="secHead" style="margin-bottom:${openBoxes.rings===false?'0':'10px'}; cursor:pointer;" onclick="toggleRings()">
@@ -7136,7 +7194,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='15.7';
+const APP_VERSION='16.0';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
