@@ -4160,7 +4160,7 @@ function addStudent(){
   if(!cls){toast('קודם צרי כיתה — בחלונית "ניהול כיתות" משמאל');return;}
   const ex=state.students.filter(s=>normName(s.name)===normName(name));
   if(ex.length&&!confirm(`⚠️ כבר קיימת תלמידה בשם "${name}"${ex.some(s=>s.cls===cls)?' באותה כיתה':' (בכיתה '+ex[0].cls+')'}.\n\nשמות כפולים עלולים לגרום לטעויות בייבוא ציונים.\nלהוסיף בכל זאת?`)) return;
-  state.students.push({id:uid(),name,cls,units:{},mugbarNames:{},grades:{}});
+  state.students.push(applyCompDefaults({id:uid(),name,cls,units:{},mugbarNames:{},grades:{},codes:{}}));
   save(); render(); toast('נוספה: '+name);
 }
 function bulkAdd(){
@@ -4172,7 +4172,7 @@ function bulkAdd(){
   const dups=names.filter(n=>state.students.some(s=>normName(s.name)===normName(n))||names.filter(x=>normName(x)===normName(n)).length>1);
   if(dups.length&&!confirm(`⚠️ ${[...new Set(dups)].length} שמות כפולים ברשימה או קיימים כבר:\n${[...new Set(dups)].slice(0,8).join(', ')}\n\nלהוסיף בכל זאת?`)) return;
   pushUndo('הוספת '+names.length+' תלמידות');
-  names.forEach(name=>state.students.push({id:uid(),name,cls,units:{},mugbarNames:{},grades:{}}));
+  names.forEach(name=>state.students.push(applyCompDefaults({id:uid(),name,cls,units:{},mugbarNames:{},grades:{},codes:{}})));
   save(); render(); toast(`נוספו ${names.length} תלמידות ל${cls}`);
 }
 function addClass(){
@@ -4470,6 +4470,7 @@ function setUnits(id,sid,val){
   const undoFn=cellSnap(id,'units',sid);
   if(pv!==uv) pushCell('יח"ל · '+((SUBJ_MAP[sid]||{}).name||sid)+' · '+st.name,undoFn);
   st.units[sid]=uv;
+  applyCompDefaults(st);                 // רמת יח"ל חדשה — ברירות המחדל שלה
   logChange('units',st,(SUBJ_MAP[sid]||{}).name||sid,pv===undefined?'—':pv,uv);
   save();
   const modal=document.getElementById('studentModal');
@@ -6242,15 +6243,84 @@ function settingsSubj(subj){
     const tot=comps.reduce((a,c)=>a+(+c.w||0),0);
     return `<div style="margin-bottom:10px;">
     <b>${u} יח"ל</b> ${Math.round(tot)!==100?`<span class="badge b-bad">סה"כ משקלים: ${tot}% (צריך 100)</span>`:`<span class="badge b-ok">סה"כ 100% ✓</span>`}
-    <table class="tbl" style="margin-top:6px;"><thead><tr><th>רכיב</th><th>משקל בציון הסופי %</th><th>חלוקת מגן/בחינה</th></tr></thead><tbody>
-    ${comps.map((c,i)=>`<tr><td>${esc(c.n)}</td>
+    <table class="tbl" style="margin-top:6px;"><thead><tr><th style="min-width:150px;">שם הרכיב</th>
+      <th>משקל %</th><th>חלוקת מגן/בחינה</th><th>סמל שאלון · ברירת מחדל</th></tr></thead><tbody>
+    ${comps.map((c,i)=>{
+      const ck=subj.id+'.'+u+'.'+i;
+      const def=((state.custom||{})[ck]||{}).code||'';
+      const base=(subj.comps(u)[i]||{}).n||'';
+      return `<tr><td>
+        <input type="text" value="${esc(c.n)}" style="width:100%; min-width:130px; font-weight:700;"
+          onchange="setCompName('${subj.id}',${u},${i},this.value)" title="שם הרכיב כפי שיופיע בכל המסכים">
+        ${c.n!==base?`<div class="note" style="margin-top:2px;">במקור: ${esc(base)}
+          <a style="color:var(--brand); cursor:pointer; font-weight:700;"
+             onclick="setCompName('${subj.id}',${u},${i},'')">↺ איפוס</a></div>`:''}</td>
       <td><input type="number" min="0" max="100" value="${c.w}" onchange="setCustom('${subj.id}',${u},${i},'w',this.value)"></td>
       <td>${c.t==='e'?`<select onchange="setCustom('${subj.id}',${u},${i},'s',this.value)">
         ${[70,60,50,40,30,20,0].map(s=>`<option value="${s}" ${c.s===s?'selected':''}>מגן ${s}% / בחינה ${100-s}%</option>`).join('')}
-      </select>`:'<span class="note">הערכה פנימית — ציון אחד</span>'}</td></tr>`).join('')}
+      </select>`:'<span class="note">הערכה פנימית — ציון אחד</span>'}</td>
+      <td><input type="text" inputmode="numeric" value="${esc(def)}" placeholder="למשל 2311" style="width:110px;"
+            onchange="setCompCode('${subj.id}',${u},${i},this.value)"
+            title="הסמל שיינתן אוטומטית לכל תלמידה חדשה ברכיב הזה">
+        ${def?`<div class="note" style="margin-top:2px;">${state.students.filter(x=>((x.codes||{})[subj.id+'.'+i]||'')===def).length} מתוך ${state.students.length} תלמידות</div>`:''}</td>
+      </tr>`;}).join('')}
     </tbody></table></div>`;
   }).join('')}
   </div></div>`;
+}
+/* ══ מבנה המקצועות — שם הרכיב וסמל ברירת המחדל ══
+   עד כה אפשר היה לשנות גלובלית רק משקל וחלוקת מגן/בחינה. שם הרכיב היה נעול
+   בקוד, וה"סמל הגורף" כתב את עצמו לתלמידות הקיימות בלבד — תלמידה שנוספה
+   למחרת לא קיבלה אותו. כאן שניהם הופכים לברירת מחדל אמיתית של המוסד. */
+function setCompName(sid,u,i,val){
+  const key=sid+'.'+u+'.'+i;
+  const nm=String(val||'').trim().slice(0,40);
+  const subj=SUBJ_MAP[sid]; if(!subj) return;
+  const base=(subj.comps(u)[i]||{}).n||'';
+  state.custom[key]=state.custom[key]||{};
+  if(!nm||nm===base) delete state.custom[key].n; else state.custom[key].n=nm;
+  if(!Object.keys(state.custom[key]).length) delete state.custom[key];
+  clearCompCache(); save(); renderKeepScroll();
+  toast(nm&&nm!==base?('הרכיב נקרא עכשיו "'+nm+'"'):'השם חזר לברירת המחדל');
+}
+function setCompCode(sid,u,i,val){
+  const key=sid+'.'+u+'.'+i;
+  const code=String(val||'').replace(/[^0-9\/]/g,'').slice(0,12);
+  state.custom[key]=state.custom[key]||{};
+  if(!code) delete state.custom[key].code; else state.custom[key].code=code;
+  if(!Object.keys(state.custom[key]).length) delete state.custom[key];
+  /* מחילים מיד על מי שעדיין אין לה סמל — מי שכבר יש לה, לא נוגעים */
+  let n=0;
+  if(code){
+    const ck=sid+'.'+i;
+    state.students.forEach(st=>{ st.codes=st.codes||{};
+      if(!st.codes[ck]){ st.codes[ck]=code; n++; } });
+  }
+  clearCompCache(); save(); renderKeepScroll();
+  if(!code){ toast('ברירת המחדל הוסרה'); return; }
+  /* אם אף תלמידה לא ברמת היח"ל הזו — הסמל נשמר אבל לא יחול על אף אחת.
+     בלי האזהרה הזו נראה כאילו ההגדרה "לא עבדה". */
+  const atLevel=state.students.filter(x=>getUnits(x,SUBJ_MAP[sid])===u).length;
+  if(state.students.length&&!atLevel)
+    alert('ברירת המחדל נשמרה — אבל אף תלמידה אינה ב-'+u+' יח"ל ב'+
+      ((SUBJ_MAP[sid]||{}).name||sid)+',\nולכן היא לא הוחלה על אף אחת.\n\n'+
+      'בדקי את רמת היח"ל בכרטיס התלמידה, או הגדירי את הסמל ברמה שבה את מלמדת.');
+  else toast('ברירת המחדל נקבעה'+(n?' · הוחלה על '+n+' תלמידות':''));
+}
+/* תלמידה חדשה מקבלת את ברירות המחדל של המוסד */
+function applyCompDefaults(st){
+  if(!st||!state.custom) return st;
+  st.codes=st.codes||{};
+  Object.keys(state.custom).forEach(k=>{
+    const code=(state.custom[k]||{}).code; if(!code) return;
+    const m=/^(.+)\.(\d+)\.(\d+)$/.exec(k); if(!m) return;
+    const sid=m[1], u=+m[2], i=m[3];
+    const subj=SUBJ_MAP[sid]; if(!subj) return;
+    if(getUnits(st,subj)!==u) return;            // רק לרמת היח"ל המתאימה
+    const ck=sid+'.'+i;
+    if(!st.codes[ck]) st.codes[ck]=code;
+  });
+  return st;
 }
 function setCustom(sid,u,i,field,val){
   const key=sid+'.'+u+'.'+i;
@@ -7202,7 +7272,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='16.1';
+const APP_VERSION='16.2';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
