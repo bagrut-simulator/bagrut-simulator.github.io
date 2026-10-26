@@ -6113,7 +6113,7 @@ function renderSettings(m){
        השאלון, זו הגדרת ההתקנה הבסיסית של המוסד ולא יכולת מתקדמת. רכזת
        שלא מוצאת איפה לקבוע את השאלונים שלה לא תשתמש בתוכנה. */''}
   ${sCard('wts','chart','מבנה המקצועות — ברירת מחדל של המוסד',
-    'שם כל רכיב, משקלו בציון הסופי, חלוקת מגן/בחינה, וסמל השאלון שיינתן אוטומטית לכל תלמידה. מוגדר פעם אחת וחל על כולן.','',
+    'שם כל רכיב, משקלו בציון הסופי, חלוקת מגן/בחינה, וסמל השאלון שיינתן אוטומטית לכל תלמידה. מוגדר פעם אחת וחל על כולן. אין כפתור שמירה — כל שינוי נשמר מיד ומסומן ב-✓.','',
     `${SUBJECTS.map(subj=>settingsSubj(subj)).join('')}
      <button class="btn warn" onclick="if(confirm('לאפס את כל מבנה המקצועות — שמות, משקלים וסמלים — לברירת המחדל?')){state.custom={};clearCompCache();save();render();}">↩️ איפוס לברירות מחדל</button>`)}
 
@@ -6238,8 +6238,26 @@ function bulkClear(){
   targets.forEach(st=>{ if(!st.ov)return; Object.keys(st.ov).filter(k=>k.indexOf(subj.id+'.')===0).forEach(k=>delete st.ov[k]); });
   save(); render(); toast('נוקו התאמות אצל '+n+' תלמידות');
 }
+/* מצב פתוח/סגור נשמר. קודם הוא היה מחלקת DOM בלבד, וכל שינוי שדה קרא
+   ל-renderKeepScroll — כך שהכרטיס נטרק מיד אחרי ההקלדה, והשינוי נראה
+   כאילו לא נשמר. זו הסיבה שחיפשת כפתור שמירה. */
+function toggleSubjCard(id){ openBoxes['sj_'+id]=!openBoxes['sj_'+id]; renderKeepScroll(); }
+let compSaved={key:'',at:0}, compSavedT=null;
+function markSaved(key){
+  compSaved={key,at:Date.now()};
+  clearTimeout(compSavedT);
+  compSavedT=setTimeout(()=>{ compSaved={key:'',at:0}; try{ renderKeepScroll(); }catch(e){} },2600);
+}
+function savedTag(ck){
+  return (compSaved.key===ck&&Date.now()-compSaved.at<2600)
+    ? '<span class="pill" style="background:#e7f8f0; color:#07714f; border-color:#a7f3d0; margin-inline-start:6px;">✓ נשמר</span>' : '';
+}
 function settingsSubj(subj){
-  return `<div class="subj-card" onclick="void 0;"><div class="subj-head" onclick="this.parentElement.classList.toggle('open')"><span>${esc(subj.name)}</span><span class="pill">לחצי לפתיחה</span></div>
+  const openSj=!!openBoxes['sj_'+subj.id];
+  const nCust=Object.keys(state.custom||{}).filter(k=>k.indexOf(subj.id+'.')===0).length;
+  return `<div class="subj-card${openSj?' open':''}"><div class="subj-head" onclick="toggleSubjCard('${subj.id}')">
+    <span>${esc(subj.name)}${nCust?`<span class="pill" style="background:#eef2ff; color:#3730a3; margin-inline-start:7px;">${nCust} התאמות</span>`:''}</span>
+    <span class="pill">${openSj?'▴ סגירה':'▾ לחצי לפתיחה'}</span></div>
   <div class="subj-body">
   ${subj.opts.filter(u=>u>0).map(u=>{
     const comps=getComps(subj,u);
@@ -6254,17 +6272,17 @@ function settingsSubj(subj){
       const base=(subj.comps(u)[i]||{}).n||'';
       return `<tr><td>
         <input type="text" value="${esc(c.n)}" style="width:100%; min-width:130px; font-weight:700;"
-          onchange="setCompName('${subj.id}',${u},${i},this.value)" title="שם הרכיב כפי שיופיע בכל המסכים">
+          onchange="setCompName('${subj.id}',${u},${i},this.value)" title="שם הרכיב כפי שיופיע בכל המסכים">${savedTag(ck+'|n')}
         ${c.n!==base?`<div class="note" style="margin-top:2px;">במקור: ${esc(base)}
           <a style="color:var(--brand); cursor:pointer; font-weight:700;"
              onclick="setCompName('${subj.id}',${u},${i},'')">↺ איפוס</a></div>`:''}</td>
-      <td><input type="number" min="0" max="100" value="${c.w}" onchange="setCustom('${subj.id}',${u},${i},'w',this.value)"></td>
+      <td><input type="number" min="0" max="100" value="${c.w}" onchange="setCustom('${subj.id}',${u},${i},'w',this.value)">${savedTag(ck+'|w')}</td>
       <td>${c.t==='e'?`<select onchange="setCustom('${subj.id}',${u},${i},'s',this.value)">
         ${[70,60,50,40,30,20,0].map(s=>`<option value="${s}" ${c.s===s?'selected':''}>מגן ${s}% / בחינה ${100-s}%</option>`).join('')}
       </select>`:'<span class="note">הערכה פנימית — ציון אחד</span>'}</td>
       <td><input type="text" inputmode="numeric" value="${esc(def)}" placeholder="למשל 2311" style="width:110px;"
             onchange="setCompCode('${subj.id}',${u},${i},this.value)"
-            title="הסמל שיינתן אוטומטית לכל תלמידה חדשה ברכיב הזה">
+            title="הסמל שיינתן אוטומטית לכל תלמידה חדשה ברכיב הזה">${savedTag(ck+'|code')}
         ${def?`<div class="note" style="margin-top:2px;">${state.students.filter(x=>((x.codes||{})[subj.id+'.'+i]||'')===def).length} מתוך ${state.students.length} תלמידות</div>`:''}</td>
       </tr>`;}).join('')}
     </tbody></table></div>`;
@@ -6283,7 +6301,7 @@ function setCompName(sid,u,i,val){
   state.custom[key]=state.custom[key]||{};
   if(!nm||nm===base) delete state.custom[key].n; else state.custom[key].n=nm;
   if(!Object.keys(state.custom[key]).length) delete state.custom[key];
-  clearCompCache(); save(); renderKeepScroll();
+  clearCompCache(); markSaved(key+'|n'); save(); renderKeepScroll();
   toast(nm&&nm!==base?('הרכיב נקרא עכשיו "'+nm+'"'):'השם חזר לברירת המחדל');
 }
 function setCompCode(sid,u,i,val){
@@ -6299,7 +6317,7 @@ function setCompCode(sid,u,i,val){
     state.students.forEach(st=>{ st.codes=st.codes||{};
       if(!st.codes[ck]){ st.codes[ck]=code; n++; } });
   }
-  clearCompCache(); save(); renderKeepScroll();
+  clearCompCache(); markSaved(key+'|code'); save(); renderKeepScroll();
   if(!code){ toast('ברירת המחדל הוסרה'); return; }
   /* אם אף תלמידה לא ברמת היח"ל הזו — הסמל נשמר אבל לא יחול על אף אחת.
      בלי האזהרה הזו נראה כאילו ההגדרה "לא עבדה". */
@@ -6331,6 +6349,7 @@ function setCustom(sid,u,i,field,val){
   if(cv===undefined){ toast('יש להזין מספר בין 0 ל-100'); return; }
   state.custom[key]=state.custom[key]||{};
   state.custom[key][field]=cv;
+  clearCompCache(); markSaved(key+'|'+field);
   save(); toast('נשמר — החישובים עודכנו'); renderKeepScroll();
 }
 
@@ -7275,7 +7294,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='16.3';
+const APP_VERSION='16.4';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
