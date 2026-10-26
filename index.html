@@ -6109,10 +6109,13 @@ function renderSettings(m){
        <button class="btn sec sm" onclick="bulkClear()">↩️ ניקוי כל ההתאמות האישיות במקצוע</button>
      </div>`):''}
 
-  ${isPro()?sCard('wts','chart','משקולות מקצועות — ברירת מחדל',
-    'חלוקת האחוזים בין מגן לבחינה ומשקל כל רכיב. חלה על תלמידות בלי התאמה אישית.','',
+  ${/* היה מוסתר מאחורי "מצב מקצועי" — אבל מאז שנוספו כאן שם הרכיב וסמל
+       השאלון, זו הגדרת ההתקנה הבסיסית של המוסד ולא יכולת מתקדמת. רכזת
+       שלא מוצאת איפה לקבוע את השאלונים שלה לא תשתמש בתוכנה. */''}
+  ${sCard('wts','chart','מבנה המקצועות — ברירת מחדל של המוסד',
+    'שם כל רכיב, משקלו בציון הסופי, חלוקת מגן/בחינה, וסמל השאלון שיינתן אוטומטית לכל תלמידה. מוגדר פעם אחת וחל על כולן.','',
     `${SUBJECTS.map(subj=>settingsSubj(subj)).join('')}
-     <button class="btn warn" onclick="if(confirm('לאפס את כל המשקולות לברירת המחדל?')){state.custom={};save();render();}">↩️ איפוס לברירות מחדל</button>`):''}
+     <button class="btn warn" onclick="if(confirm('לאפס את כל מבנה המקצועות — שמות, משקלים וסמלים — לברירת המחדל?')){state.custom={};clearCompCache();save();render();}">↩️ איפוס לברירות מחדל</button>`)}
 
   ${sGrp('warn','אזור מסוכן')}
   <div class="dzCard">
@@ -7272,7 +7275,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='16.2';
+const APP_VERSION='16.3';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
