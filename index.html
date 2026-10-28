@@ -487,6 +487,7 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
 .al-miss{background:#f8fafc; border-right:4px solid #94a3b8;}
 .chartbox{position:relative; height:280px;}
 .chartbox.tall{height:420px;}
+.focusCard{border:2px solid #9333ea; box-shadow:0 4px 18px rgba(147,51,234,.10);}
 .thW{font-weight:700; color:var(--brand); opacity:.85;}
 .thW.off{color:var(--muted); font-weight:400;}
 .subj-card{border:1px solid var(--line); border-radius:13px; margin-bottom:11px; overflow:hidden; box-shadow:0 2px 10px rgba(30,41,80,.05);}
@@ -4046,6 +4047,7 @@ function renderDash(m){
     ${kpiCard('k6','chart',partialMode?pAvg:avgAll,'ממוצע שכבתי',partialMode?pAvg:avgAll,
       partialMode?'כולל ציונים חלקיים':'',true)}
   </div>`:''}
+  ${n?focusPanel(results):''}
   ${n?`<div class="card" style="margin-bottom:16px; padding:${openBoxes.rings===false?'10px 17px':'17px'};">
     <div class="secHead" style="margin-bottom:${openBoxes.rings===false?'0':'10px'}; cursor:pointer;" onclick="toggleRings()">
       <span class="shIco">${ic('target',16)}</span>
@@ -5738,6 +5740,131 @@ function calcPanel(studs){
   </div>`;
 }
 
+/* ══════════ "מי קרובה להצטיינות — ומה בדיוק צריך" ══════════
+   calcPanel ו-predictionPanel דורשים שכל הציונים יהיו במקום (complete), ושניהם
+   יושבים במסך הסימולציה. התוצאה: באמצע השנה, כשהשאלה הזאת הכי חשובה, אין
+   בדשבורד שום רשימה של תלמידות שאפשר לעבוד איתן — רק מספרים על כרטיסים.
+   הפאנל הזה עובד על מסלול הצפי, נותן שמות, ואומר לכל אחת את המהלך הכי משתלם. */
+function focusCands(st,r){
+  const out=[], tot=r.totalUnits||0;
+  if(!tot) return out;
+  SUBJECTS.forEach(subj=>{
+    const sr=r.per[subj.id];
+    if(!sr||!sr.active) return;
+    if(subj.internalOnly&&!state.includeInternal) return;
+    const u=sr.u; if(!u) return;
+    const comps=getCompsFor(st,subj,u);
+    const wSum=comps.reduce((a,c)=>a+(+c.w||0),0); if(!wSum) return;
+    comps.forEach((c,i)=>{
+      if(!c.w) return;
+      const d=(sr.details||[])[i];
+      const has=!!(d&&d.val!==null&&d.val!==undefined);
+      const key=subj.id+'.'+i;
+      out.push({subj,c,i,
+        share:(u/tot)*(c.w/wSum),            // כמה מהממוצע הכללי הרכיב שווה
+        has, val:has?Math.round(d.val):null,
+        keys:c.t==='i'?[key]:[key+'.m',key+'.e']});
+    });
+  });
+  return out;
+}
+/* מה הממוצע הצפוי אם הרכיב הזה יקבל ציון v — חישוב מלא, לא קירוב */
+function projWith(st,keys,v){
+  const g=st.grades||(st.grades={}), bak={};
+  keys.forEach(k=>{ bak[k]=Object.prototype.hasOwnProperty.call(g,k)?g[k]:undefined; g[k]=v; });
+  let out=null;
+  try{ out=calcStudent(st).projAvg; }
+  finally{ keys.forEach(k=>{ if(bak[k]===undefined) delete g[k]; else g[k]=bak[k]; }); }
+  return out;
+}
+function focusLever(st,r,target){
+  const cands=focusCands(st,r);
+  const miss=cands.filter(x=>!x.has).sort((a,b)=>b.share-a.share);
+  // ציון נמוך שכבר הוזן — פוטנציאל שיפור במועד ב׳, משוקלל לפי כמה יש להרוויח
+  const weak=cands.filter(x=>x.has&&x.val<95)
+                  .sort((a,b)=>(b.share*(95-b.val))-(a.share*(95-a.val)));
+  const pick=miss[0]||weak[0];
+  if(!pick) return null;
+  const a95=projWith(st,pick.keys,95), a60=projWith(st,pick.keys,60);
+  if(a95===null||a60===null) return null;
+  // הקשר בין ציון הרכיב לממוצע הוא לינארי — שתי נקודות מספיקות כדי להפוך אותו
+  const b=(a95-a60)/35;
+  let need=null, reach=a95;
+  if(b>0.0001){
+    const v=Math.ceil(((target-(a95-95*b))/b)*10)/10;
+    if(v<=100){
+      need=Math.max(0,Math.ceil(v)); reach=projWith(st,pick.keys,need);
+      // אימות אחרי העיגול — ואם העיגול הפיל אותנו מתחת ליעד, נקודה אחת מעלה
+      if(reach!==null&&reach<target&&need<100){ need++; reach=projWith(st,pick.keys,need); }
+      if(reach===null||reach<target) need=null;
+    }
+  }
+  return {pick, need, reach, a95, share:Math.round(pick.share*1000)/10};
+}
+let focusAll=false;
+function toggleFocusAll(){ focusAll=!focusAll; renderKeepScroll(); }
+function focusPanel(results){
+  const T=state.thresholds;
+  const rows=[];
+  results.forEach(x=>{
+    const r=x.r;
+    const sc=(r.projAvg!==null&&r.projAvg!==undefined)?r.projAvg:r.avg;
+    if(sc===null||sc===undefined) return;
+    if(r.projBlockers&&r.projBlockers.length) return;   // מופיעה ב"דורשות התייחסות"
+    if(sc<T.potential-3) return;                        // רחוקה מדי כדי להיות מהלך ריאלי
+    rows.push({st:x.st,r,sc});
+  });
+  if(!rows.length) return '';
+  rows.sort((a,b)=>b.sc-a.sc);
+  const shown=focusAll?rows:rows.slice(0,15);
+  const nOver=rows.filter(x=>x.sc>T.excel).length;
+  const nClose=rows.filter(x=>x.sc<=T.excel).length;
+  const cov=Math.round(avgOf(results.map(x=>x.r.coverage||0))||0);
+  return `<div class="card focusCard" style="margin-bottom:16px;">
+    ${secHead('star','מי קרובה להצטיינות — ומה בדיוק צריך',
+      'כל תלמידה בטווח ההישג, עם המהלך היחיד שישפיע אצלה הכי הרבה',
+      `${schip('star',nOver+' כבר מעל '+T.excel)}${schip('sparkles',nClose+' בטווח')}`)}
+    <div class="note" style="margin-bottom:9px;">
+      המספרים הם <b>צפי לפי מה שכבר הוזן</b>${cov<95?' ('+cov+'% מהמשקל)':''}, ולכן הרשימה עובדת גם באמצע השנה.
+      <b>"משפיע X%"</b> = כמה מהממוצע הכללי הרכיב הזה שווה — שם כדאי להשקיע.
+      לחיצה על שם פותחת את כרטיס התלמידה.
+    </div>
+    <div class="scroll" style="max-height:52vh;">
+    <table class="tbl"><thead><tr>
+      <th>תלמידה</th><th>ממוצע צפי</th><th>כיסוי</th><th>המצב</th><th>המהלך הכי משתלם</th>
+    </tr></thead><tbody>
+    ${shown.map(x=>{
+      const over=x.sc>T.excel;
+      const gap=Math.round((T.excel-x.sc)*10)/10;
+      const lv=over?null:focusLever(x.st,x.r,T.excel+0.1);
+      let move='';
+      if(over){
+        move=`<span class="badge b-exc">מחזיקה — לשמור על הרמה</span>`;
+      }else if(!lv){
+        move=`<span class="note">אין רכיב פנוי שמזיז מספיק — כדאי לפתוח את הכרטיס</span>`;
+      }else{
+        const where=`<b>${esc(lv.pick.subj.name)}</b> · ${esc(lv.pick.c.n)}
+          <span class="pill" title="כמה מהממוצע הכללי הרכיב הזה שווה">משפיע ${lv.share}%</span>`;
+        const cur=lv.pick.has?`<span class="note">כרגע ${lv.pick.val}</span> ` : '<span class="note">טרם הוזן</span> ';
+        move=(lv.need!==null&&lv.need<=100)
+          ? `${where}<br>${cur}<span class="needbadge">ציון ${lv.need} שם ⟵ ${fmt(lv.reach)} ✓</span>`
+          : `${where}<br>${cur}<span class="badge b-warn">גם 100 מגיע רק ל-${fmt(lv.a95===null?'':lv.a95)} — צריך יותר מרכיב אחד</span>`;
+      }
+      return `<tr>
+        <td><span class="stName" onclick="openStudent('${x.st.id}')">${avatar(x.st.name,26)}<span class="name-link">${esc(x.st.name)}</span></span>
+          <br><small style="color:var(--muted)">${esc(x.st.cls)}</small></td>
+        <td class="${gradeClass(x.sc)}" style="font-weight:800; font-size:17px;">${fmt(x.sc)}</td>
+        <td><span class="pill">${x.r.coverage||0}%</span></td>
+        <td>${over?`<span class="delta-up">+${Math.round((x.sc-T.excel)*10)/10} מעל הסף</span>`
+             :gap<=0?`<span class="grade-warn" style="font-weight:800;">על הסף בדיוק — נדרש מעל ${T.excel}</span>`
+                  :`<span class="${gap<=2?'grade-warn':''}" style="font-weight:800;">חסרים ${gap}</span>`}</td>
+        <td>${move}</td></tr>`;
+    }).join('')}
+    </tbody></table></div>
+    ${rows.length>15?`<button class="btn sec sm" style="margin-top:9px;" onclick="toggleFocusAll()">
+      ${focusAll?'▴ הצגת 15 הראשונות':'▾ הצגת כל '+rows.length+' התלמידות'}</button>`:''}
+  </div>`;
+}
 /* ============ חיזוי מצטיינות סוף שנה ============ */
 function predictionPanel(studs){
   const T=state.thresholds;
@@ -7694,7 +7821,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='16.9';
+const APP_VERSION='17.0';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
