@@ -487,6 +487,8 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
 .al-miss{background:#f8fafc; border-right:4px solid #94a3b8;}
 .chartbox{position:relative; height:280px;}
 .chartbox.tall{height:420px;}
+.thW{font-weight:700; color:var(--brand); opacity:.85;}
+.thW.off{color:var(--muted); font-weight:400;}
 .subj-card{border:1px solid var(--line); border-radius:13px; margin-bottom:11px; overflow:hidden; box-shadow:0 2px 10px rgba(30,41,80,.05);}
 .subj-head{background:linear-gradient(135deg,#f1f4fb,#e9eefb); padding:11px 14px; font-weight:800; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;}
 .subj-head:hover{background:linear-gradient(135deg,#e9eefb,#e0e8fa);}
@@ -3146,6 +3148,21 @@ function getComps(subj,u){
   _compCache[ck]=out;
   return out;
 }
+/* ══ כותרות הטבלאות ══
+   הכותרות נבנו מ-subj.comps(maxU) — ההגדרה הגולמית שבקוד. לכן שם רכיב
+   שהמוסד שינה בהגדרות הופיע נכון רק במסך ההגדרות עצמו, ובהזנת הציונים,
+   בסימולציה ובייצוא לאקסל המשיך להופיע השם הישן. בנוסף הכותרת נלקחה תמיד
+   מרמת היח"ל הגבוהה ביותר, גם בבית ספר שכל השכבה שלו לומדת ברמה אחרת. */
+function headUnits(subj,studs){
+  const maxU=subj.opts[subj.opts.length-1];
+  if(subj.opts.filter(u=>u>0).length<2) return maxU;
+  const cnt={};
+  (studs||[]).forEach(st=>{ const u=getUnits(st,subj); if(u>0) cnt[u]=(cnt[u]||0)+1; });
+  let best=0,bn=0;
+  Object.keys(cnt).forEach(u=>{ if(cnt[u]>bn||(cnt[u]===bn&&+u>best)){ bn=cnt[u]; best=+u; } });
+  return best||maxU;
+}
+function headCompsOf(subj,studs){ return getComps(subj,headUnits(subj,studs)); }
 // רכיבים אפקטיביים לתלמידה ספציפית: ברירת מחדל ← הגדרות גלובליות ← התאמה אישית לתלמידה
 function getCompsFor(st,subj,u){
   const base=getComps(subj,u);
@@ -4934,13 +4951,19 @@ function goSubj(sid,stId){
 }
 function entryGrid(subj,studs){
   if(!studs.length) return '<div class="note">אין תלמידות — הוסיפי בלשונית "תלמידות"</div>';
-  // כותרות לפי יח"ל מקסימלי כדי לכלול את כל הרכיבים
-  const maxU=subj.opts[subj.opts.length-1];
-  const headComps=subj.comps(maxU);
+  // כותרות לפי הרמה שבה השכבה באמת לומדת, ועם השמות שהמוסד קבע
+  const maxU=headUnits(subj,studs);
+  const headComps=headCompsOf(subj,studs);
   let head=`<tr><th>שם</th>${subj.opts.length>1?'<th>יח"ל</th>':''}${subj.named?'<th>מקצוע</th>':''}`;
+  /* המשקל לא הופיע כאן כלל. לכן רכזת ששינתה בהגדרות משקל מ-35 ל-21, עברה
+     להזנת הציונים וראתה טבלה זהה לחלוטין — חשבה בצדק שהשינוי לא נשמר.
+     עכשיו מבנה המקצוע גלוי במקום שבו עובדים איתו. */
   headComps.forEach((c,i)=>{
-    const sub=(c.t==='i'||(c.s>0&&c.s<100))?'':`<br><small>${c.s===0?'100% בחינה':'מגן בלבד'}</small>`;
-    head+=`<th>${esc(c.n)}${sub}</th>`;
+    const w=(+c.w||0);
+    const parts=[];
+    parts.push(w?(Math.round(w*10)/10)+'%':'לא בשימוש');
+    if(c.t==='e'&&w) parts.push(c.s===0?'100% בחינה':c.s===100?'מגן בלבד':'מגן '+c.s+'%');
+    head+=`<th>${esc(c.n)}<br><small class="${w?'thW':'thW off'}">${parts.join(' · ')}</small></th>`;
   });
   head+='<th>ציון סופי</th><th>סטטוס</th></tr>';
   const rows=studs.map(st=>{
@@ -4953,7 +4976,14 @@ function entryGrid(subj,studs){
     if(subj.named) tds+=`<td><input type="text" data-k="n|${st.id}|${subj.id}" style="width:110px;" value="${esc((st.mugbarNames||{})[subj.id]||'')}" onchange="setMugbarName('${st.id}','${subj.id}',this.value)"></td>`;
     headComps.forEach((hc,i)=>{
       const c=comps[i];
-      if(u===0||!c||!c.w){ tds+='<td class="cEmpty">—</td>'; return; }
+      /* "—" היה אילם: אותו קו בדיוק הופיע גם לתלמידה שאינה לומדת את המקצוע
+         וגם לרכיב שמשקלו 0, ונראה כאילו התוכנה פשוט "לא נותנת" להזין. */
+      if(u===0||!c||!c.w){
+        const why=u===0
+          ? 'התלמידה אינה לומדת את המקצוע. לשינוי: עמודת יח״ל בשורה הזאת.'
+          : 'משקל הרכיב ״'+esc(hc.n||'')+'״ הוא 0, ולכן הוא אינו חלק מהציון ואין מה להזין בו. '+
+            'לשינוי: הגדרות ← מבנה המקצועות ← '+esc(subj.name)+' ← משקל %.';
+        tds+='<td class="cEmpty" title="'+why+'">—</td>'; return; }
       const key=subj.id+'.'+i, g=st.grades||{};
       const nt=noteOf(st,key);
       const kc=k=>((g[k]==null?'cell-miss':'')+gstatCls(st,k));
@@ -5544,8 +5574,8 @@ function renderSim(m){
 // טבלת עריכה של הסימולציה: מציגה את הציונים האמיתיים, שינויים נשמרים בשכבת הניסוי בלבד
 function simGrid(subj,studs){
   if(!studs.length) return '<div class="note">אין תלמידות</div>';
-  const maxU=subj.opts[subj.opts.length-1];
-  const headComps=subj.comps(maxU);
+  const maxU=headUnits(subj,studs);
+  const headComps=headCompsOf(subj,studs);
   let head=`<tr><th>שם</th>${subj.opts.length>1?'<th>יח"ל</th>':''}`;
   headComps.forEach(c=>{ head+=c.t==='i'?`<th>${esc(c.n)}</th>`:`<th>${esc(c.n)}<br><small>${c.s===0?'100% בחינה':'מגן '+c.s+'%'}</small></th>`; });
   head+='<th style="background:#f5f3ff;">מבחנים · בחנים · עבודות<br><small>ממוצע משוקלל · לחיזוי בלבד</small></th><th>ציון אמיתי</th><th>ציון בניסוי</th></tr>';
@@ -5560,7 +5590,11 @@ function simGrid(subj,studs){
     if(subj.opts.length>1) tds+=`<td>${u===0?'—':u}</td>`;
     headComps.forEach((hc,i)=>{
       const c=comps[i];
-      if(u===0||!c||!c.w){ tds+='<td style="color:#cbd5e1;">—</td>'; return; }
+      if(u===0||!c||!c.w){
+        const why=u===0
+          ? 'התלמידה אינה לומדת את המקצוע'
+          : 'משקל הרכיב ״'+esc(hc.n||'')+'״ הוא 0 — אפשר לשנות בהגדרות ← מבנה המקצועות';
+        tds+='<td style="color:#cbd5e1;" title="'+why+'">—</td>'; return; }
       const key=subj.id+'.'+i;
       const cls=k=>((g[k]==null?'cell-miss ':'')+(isSimKey(st,k)?'sim-cell':''));
       if(c.t==='i'){
@@ -6473,7 +6507,28 @@ function settingsSubj(subj){
     ${subj.user?`<button class="btn ok sm" style="margin-top:7px;" onclick="addXComp('${subj.id}')">${ic('plus',13)}הוספת רכיב</button>`:''}
     </div>`;
   }).join('')}
+  <div class="toolbar" style="border-top:1px solid var(--line); padding-top:10px; margin-top:4px;">
+    <button class="btn ok" onclick="saveSubjStruct('${subj.id}')">${ic('check',15)}שמירה וסגירה</button>
+    <span class="note">כל שינוי כבר נשמר ברגע שיצאת מהשדה (מופיע ✓ לידו).
+      הכפתור בודק שסך המשקלים 100% וסוגר את הכרטיס.</span>
+  </div>
   </div></div>`;
+}
+/* יואב ביקש את הכפתור הזה פעמיים. הוא אינו "שומר" — השמירה כבר קרתה — אבל
+   הוא נותן את מה שבאמת חסר: אישור מפורש שהמבנה תקין, במקום אמון עיוור. */
+function saveSubjStruct(sid){
+  const sj=SUBJ_MAP[sid]||{name:sid};
+  const bad=badLevels(sid);
+  if(bad.length){
+    const lines=bad.map(b=>'  • '+b.u+' יח"ל: סה"כ '+b.tot+'% ('+
+      (b.tot>100?('עודף '+Math.round((b.tot-100)*10)/10):('חסרים '+Math.round((100-b.tot)*10)/10))+'%)').join('\n');
+    alert('לא ניתן לסגור — סך המשקלים ב"'+sj.name+'" אינו 100%:\n\n'+lines+
+      '\n\nתקני את המשקלים כך שיסתכמו ב-100%.');
+    return;
+  }
+  openBoxes['sj_'+sid]=false;
+  save(); renderKeepScroll();
+  toast('מבנה "'+sj.name+'" נשמר · סה"כ 100% ✓ — ההזנה והחישובים מתעדכנים מיד');
 }
 /* ══════════ מקצוע שהרכזת מוסיפה בעצמה ══════════
    כל מקצוע מובנה דרש עד כה עריכת קוד. כאן זה הופך להגדרה של המוסד:
@@ -6848,8 +6903,7 @@ function exportExcel(cls){
       const sn=noteOf(st,subj.id); if(sn) row[subj.name+' - הערה כללית']=sn;
       if(subj.opts.length>1) row[subj.name+' - יח"ל']=getUnits(st,subj);
       if(subj.named) row[subj.name+' - שם מקצוע']=(st.mugbarNames||{})[subj.id]||'';
-      const maxU=subj.opts[subj.opts.length-1];
-      subj.comps(maxU).forEach((c,i)=>{
+      headCompsOf(subj,studs).forEach((c,i)=>{
         const key=subj.id+'.'+i, g=st.grades||{}, codes=st.codes||{}, ov=(st.ov||{})[key]||{};
         if(c.t==='i') row[subj.name+' | '+c.n]=g[key]??'';
         else{ row[subj.name+' | '+c.n+' | מגן']=g[key+'.m']??''; row[subj.name+' | '+c.n+' | בחינה']=g[key+'.e']??''; }
@@ -7261,12 +7315,19 @@ function importExcel(input){
           if(row[uKey]!==undefined&&row[uKey]!=='') st.units[subj.id]=+row[uKey];
           const nKey=subj.name+' - שם מקצוע';
           if(row[nKey]) st.mugbarNames[subj.id]=String(row[nKey]);
-          const maxU=subj.opts[subj.opts.length-1];
-          subj.comps(maxU).forEach((c,i)=>{
+          /* קובץ שיוצא לפני שינוי שם רכיב נושא את השם הישן. לכן מחפשים
+             גם לפי השם הנוכחי וגם לפי השם המקורי שבקוד — אחרת ייבוא של
+             גיבוי ישן היה מחזיר תלמידות בלי ציונים, בשקט. */
+          const maxU=headUnits(subj,state.students);
+          const effC=headCompsOf(subj,state.students), rawC=subj.comps(maxU);
+          effC.forEach((c,i)=>{
             const key=subj.id+'.'+i;
+            const names=[c.n,(rawC[i]||{}).n].filter((v,j,a)=>v&&a.indexOf(v)===j);
+            const pick=suf=>{ for(const nm of names){
+              const v=row[subj.name+' | '+nm+suf]; if(v!==undefined&&v!=='') return v; } return undefined; };
             const set=(k,v)=>{ if(v!==undefined&&v!=='') st.grades[k]=+v; };
-            if(c.t==='i') set(key,row[subj.name+' | '+c.n]);
-            else{ set(key+'.m',row[subj.name+' | '+c.n+' | מגן']); set(key+'.e',row[subj.name+' | '+c.n+' | בחינה']); }
+            if(c.t==='i') set(key,pick(''));
+            else{ set(key+'.m',pick(' | מגן')); set(key+'.e',pick(' | בחינה')); }
           });
         });
       });
@@ -7633,7 +7694,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='16.7';
+const APP_VERSION='16.9';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
