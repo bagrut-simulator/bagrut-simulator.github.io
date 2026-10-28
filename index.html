@@ -6350,16 +6350,69 @@ function bulkClear(){
 /* מצב פתוח/סגור נשמר. קודם הוא היה מחלקת DOM בלבד, וכל שינוי שדה קרא
    ל-renderKeepScroll — כך שהכרטיס נטרק מיד אחרי ההקלדה, והשינוי נראה
    כאילו לא נשמר. זו הסיבה שחיפשת כפתור שמירה. */
-function toggleSubjCard(id){ openBoxes['sj_'+id]=!openBoxes['sj_'+id]; renderKeepScroll(); }
-let compSaved={key:'',at:0}, compSavedT=null;
-function markSaved(key){
-  compSaved={key,at:Date.now()};
-  clearTimeout(compSavedT);
-  compSavedT=setTimeout(()=>{ compSaved={key:'',at:0}; try{ renderKeepScroll(); }catch(e){} },2600);
+function toggleSubjCard(id){
+  /* "בסוף, לפני שזה משתנה — תחסום אותי". באמצע העריכה אי אפשר לחסום: כדי
+     להעביר 5% מרכיב לרכיב חייבים לעבור דרך מצב ביניים של 95 או 105. לכן
+     המספר תמיד נקלט, הסיכום מתעדכן חי, והחסימה היא ברגע שמנסים לסגור. */
+  if(openBoxes['sj_'+id]){
+    const bad=badLevels(id);
+    if(bad.length){
+      const sj=SUBJ_MAP[id]||{name:id};
+      const lines=bad.map(b=>'  • '+b.u+' יח"ל: סה"כ '+b.tot+'% ('+
+        (b.tot>100?('עודף '+Math.round((b.tot-100)*10)/10):('חסרים '+Math.round((100-b.tot)*10)/10))+'%)').join('\n');
+      if(!confirm('סך המשקלים ב"'+sj.name+'" אינו 100%:\n\n'+lines+
+        '\n\nהציון עדיין יחושב ביחס לסך שהוזן, אבל הוא לא יהיה מה שהתכוונת אליו.\n\n'+
+        'אישור = לסגור בכל זאת · ביטול = להישאר ולתקן')) return;
+    }
+  }
+  openBoxes['sj_'+id]=!openBoxes['sj_'+id]; renderKeepScroll();
 }
-function savedTag(ck){
-  return (compSaved.key===ck&&Date.now()-compSaved.at<2600)
-    ? '<span class="pill" style="background:#e7f8f0; color:#07714f; border-color:#a7f3d0; margin-inline-start:6px;">✓ נשמר</span>' : '';
+/* ══ תג "נשמר" ══
+   קודם markSaved קבע טיימר שקרא ל-renderKeepScroll אחרי 2.6 שניות, ו-setCustom
+   צייר את כל מסך ההגדרות מחדש בכל שינוי משקל. התוצאה: בזמן שהרכזת הקלידה
+   בשדה הבא, המסך נבנה מחדש תחת האצבע שלה — השדה שבעריכה נמחק והמספר שהוקלד
+   אבד. זה היה ה"קפיצה וחזרה לערך הקודם". עכשיו התג נכתב ישירות לאלמנט שלו
+   ונמחק ממנו, בלי לגעת בשאר המסך. */
+let compSavedT={};
+function savedTag(ck){ return '<span class="svTag" id="sv:'+ck+'"></span>'; }
+function markSaved(key){
+  const e=(typeof document!=='undefined')&&document.getElementById('sv:'+key);
+  if(!e) return;
+  e.innerHTML='<span class="pill" style="background:#e7f8f0; color:#07714f; border-color:#a7f3d0; margin-inline-start:6px;">✓ נשמר</span>';
+  clearTimeout(compSavedT[key]);
+  compSavedT[key]=setTimeout(()=>{ try{ e.innerHTML=''; }catch(x){} },2600);
+}
+/* ══ סך המשקלים ברמת יח"ל ══ */
+function wtBadge(tot){
+  const t=Math.round(tot*10)/10;
+  if(t===100) return '<span class="badge b-ok">סה"כ 100% ✓</span>';
+  const gap=Math.round((100-t)*10)/10;
+  return '<span class="badge b-bad">סה"כ '+t+'% · '+(gap>0?('חסרים '+gap):('עודף '+Math.abs(gap)))+'%</span>';
+}
+function levelTotal(sid,u){
+  const sj=SUBJ_MAP[sid]; if(!sj) return 0;
+  return getComps(sj,u).reduce((a,c)=>a+(+c.w||0),0);
+}
+// סכום חי לפי מה שמוקלד ברגע זה — עוד לפני שהשדה נסגר
+function liveTot(sid,u){
+  if(typeof document==='undefined') return;
+  const box=document.getElementById('wt:'+sid+'.'+u); if(!box) return;
+  let t=0;
+  (document.querySelectorAll('[data-wt="'+sid+'.'+u+'"]')||[]).forEach(el=>{
+    const v=+el.value; if(Number.isFinite(v)) t+=v;
+  });
+  box.innerHTML=wtBadge(t);
+}
+/* האם יש רמה שהרכזת נגעה בה ושסכומה אינו 100? */
+function badLevels(sid){
+  const sj=SUBJ_MAP[sid], out=[]; if(!sj) return out;
+  sj.opts.filter(u=>u>0).forEach(u=>{
+    const touched=sj.user||Object.keys(state.custom||{}).some(k=>k.indexOf(sid+'.'+u+'.')===0);
+    if(!touched) return;
+    const t=Math.round(levelTotal(sid,u)*10)/10;
+    if(t!==100) out.push({u,tot:t});
+  });
+  return out;
 }
 function settingsSubj(subj){
   const openSj=!!openBoxes['sj_'+subj.id];
@@ -6384,7 +6437,7 @@ function settingsSubj(subj){
     const comps=getComps(subj,u);
     const tot=comps.reduce((a,c)=>a+(+c.w||0),0);
     return `<div style="margin-bottom:10px;">
-    <b>${u} יח"ל</b> ${Math.round(tot)!==100?`<span class="badge b-bad">סה"כ משקלים: ${tot}% (צריך 100)</span>`:`<span class="badge b-ok">סה"כ 100% ✓</span>`}
+    <b>${u} יח"ל</b> <span id="wt:${subj.id}.${u}">${wtBadge(tot)}</span>
     <table class="tbl" style="margin-top:6px;"><thead><tr><th style="min-width:150px;">שם הרכיב</th>
       <th>משקל %</th><th>${subj.user?'סוג הרכיב':''}</th><th>חלוקת מגן/בחינה</th><th>סמל שאלון · ברירת מחדל</th>${subj.user?'<th></th>':''}</tr></thead><tbody>
     ${comps.map((c,i)=>{
@@ -6392,12 +6445,14 @@ function settingsSubj(subj){
       const def=((state.custom||{})[ck]||{}).code||'';
       const base=(subj.comps(u)[i]||{}).n||'';
       return `<tr><td>
-        <input type="text" value="${esc(c.n)}" style="width:100%; min-width:130px; font-weight:700;"
+        <input type="text" id="nm:${ck}" value="${esc(c.n)}" style="width:100%; min-width:130px; font-weight:700;"
           onchange="setCompName('${subj.id}',${u},${i},this.value)" title="שם הרכיב כפי שיופיע בכל המסכים">${savedTag(ck+'|n')}
-        ${c.n!==base?`<div class="note" style="margin-top:2px;">במקור: ${esc(base)}
+        <span id="or:${ck}">${c.n!==base?`<div class="note" style="margin-top:2px;">במקור: ${esc(base)}
           <a style="color:var(--brand); cursor:pointer; font-weight:700;"
-             onclick="setCompName('${subj.id}',${u},${i},'')">↺ איפוס</a></div>`:''}</td>
-      <td><input type="number" min="0" max="100" value="${c.w}" onchange="setCustom('${subj.id}',${u},${i},'w',this.value)">${savedTag(ck+'|w')}</td>
+             onclick="setCompName('${subj.id}',${u},${i},'')">↺ איפוס</a></div>`:''}</span></td>
+      <td><input type="number" min="0" max="100" value="${c.w}" data-wt="${subj.id}.${u}"
+            oninput="liveTot('${subj.id}',${u})"
+            onchange="setCustom('${subj.id}',${u},${i},'w',this.value)">${savedTag(ck+'|w')}</td>
       <td>${subj.user?(i<((xSubj(subj.id)||{comps:[]}).comps.length)
         ?`<select onchange="setXCompType('${subj.id}',${i},this.value)">
             <option value="i" ${c.t==='i'?'selected':''}>הערכה פנימית</option>
@@ -6409,7 +6464,7 @@ function settingsSubj(subj){
       <td><input type="text" inputmode="numeric" value="${esc(def)}" placeholder="למשל 2311" style="width:110px;"
             onchange="setCompCode('${subj.id}',${u},${i},this.value)"
             title="הסמל שיינתן אוטומטית לכל תלמידה חדשה ברכיב הזה">${savedTag(ck+'|code')}
-        ${def?`<div class="note" style="margin-top:2px;">${state.students.filter(x=>((x.codes||{})[subj.id+'.'+i]||'')===def).length} מתוך ${state.students.length} תלמידות</div>`:''}</td>
+        <span id="cn:${ck}">${def?`<div class="note" style="margin-top:2px;">${state.students.filter(x=>((x.codes||{})[subj.id+'.'+i]||'')===def).length} מתוך ${state.students.length} תלמידות</div>`:''}</span></td>
       ${subj.user?`<td>${i<((xSubj(subj.id)||{comps:[]}).comps.length)
         ?`<button class="btn dz sm" title="מחיקת הרכיב — שאר הרכיבים יוזזו והציונים שלהם יישמרו" onclick="delXComp('${subj.id}',${i})">✕</button>`
         :''}</td>`:''}
@@ -6561,7 +6616,16 @@ function setCompName(sid,u,i,val){
   state.custom[key]=state.custom[key]||{};
   if(!nm||nm===base) delete state.custom[key].n; else state.custom[key].n=nm;
   if(!Object.keys(state.custom[key]).length) delete state.custom[key];
-  clearCompCache(); markSaved(key+'|n'); save(); renderKeepScroll();
+  clearCompCache(); save(); markSaved(key+'|n');
+  // רק שורת ה"במקור" מתחת לשדה מתעדכנת — המסך לא נבנה מחדש תחת האצבע
+  try{
+    const e=document.getElementById('or:'+key);
+    if(e) e.innerHTML=(nm&&nm!==base)
+      ? '<div class="note" style="margin-top:2px;">במקור: '+esc(base)+
+        ' <a style="color:var(--brand); cursor:pointer; font-weight:700;" onclick="setCompName(\''+sid+'\','+u+','+i+',\'\')">↺ איפוס</a></div>'
+      : '';
+    if(!nm){ const f=document.getElementById('nm:'+key); if(f) f.value=base; }
+  }catch(e){}
   toast(nm&&nm!==base?('הרכיב נקרא עכשיו "'+nm+'"'):'השם חזר לברירת המחדל');
 }
 function setCompCode(sid,u,i,val){
@@ -6577,7 +6641,14 @@ function setCompCode(sid,u,i,val){
     state.students.forEach(st=>{ st.codes=st.codes||{};
       if(!st.codes[ck]){ st.codes[ck]=code; n++; } });
   }
-  clearCompCache(); markSaved(key+'|code'); save(); renderKeepScroll();
+  clearCompCache(); save(); markSaved(key+'|code');
+  try{
+    const e=document.getElementById('cn:'+key);
+    if(e) e.innerHTML=code
+      ? '<div class="note" style="margin-top:2px;">'+
+        state.students.filter(x=>((x.codes||{})[sid+'.'+i]||'')===code).length+
+        ' מתוך '+state.students.length+' תלמידות</div>' : '';
+  }catch(e){}
   if(!code){ toast('ברירת המחדל הוסרה'); return; }
   /* אם אף תלמידה לא ברמת היח"ל הזו — הסמל נשמר אבל לא יחול על אף אחת.
      בלי האזהרה הזו נראה כאילו ההגדרה "לא עבדה". */
@@ -6609,8 +6680,16 @@ function setCustom(sid,u,i,field,val){
   if(cv===undefined){ toast('יש להזין מספר בין 0 ל-100'); return; }
   state.custom[key]=state.custom[key]||{};
   state.custom[key][field]=cv;
-  clearCompCache(); markSaved(key+'|'+field);
-  save(); toast('נשמר — החישובים עודכנו'); renderKeepScroll();
+  clearCompCache(); save();
+  markSaved(key+'|'+field);
+  // רק התג והסיכום מתעדכנים. המסך לא נבנה מחדש, ולכן השדה הבא שבעריכה שורד.
+  const box=(typeof document!=='undefined')&&document.getElementById('wt:'+sid+'.'+u);
+  if(box) box.innerHTML=wtBadge(levelTotal(sid,u));
+  if(field==='w'){
+    const t=Math.round(levelTotal(sid,u)*10)/10;
+    toast(t===100?'נשמר · סה"כ 100% ✓'
+                 :('נשמר · סה"כ '+t+'%'+(t>100?' — מעל 100':' — עדיין לא 100')));
+  }else toast('נשמר — החישובים עודכנו');
 }
 
 /* ============ אקסל ============ */
@@ -7554,7 +7633,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='16.6';
+const APP_VERSION='16.7';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
