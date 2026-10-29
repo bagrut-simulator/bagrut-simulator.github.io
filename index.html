@@ -6516,6 +6516,7 @@ function toggleSubjCard(id){
      להעביר 5% מרכיב לרכיב חייבים לעבור דרך מצב ביניים של 95 או 105. לכן
      המספר תמיד נקלט, הסיכום מתעדכן חי, והחסימה היא ברגע שמנסים לסגור. */
   if(openBoxes['sj_'+id]){
+    flushWeights(id); repaintTotals(id);
     const bad=badLevels(id);
     if(bad.length){
       const sj=SUBJ_MAP[id]||{name:id};
@@ -6564,6 +6565,50 @@ function liveTot(sid,u){
   });
   box.innerHTML=wtBadge(t);
 }
+/* ══ מצב המסך ומצב הנתונים חייבים להיות אותו דבר ══
+   liveTot צייר את התג מתוך שדות הקלט, ו-badLevels בדק את המצב השמור. שדה
+   שהמשתמש הקליד בו ולא יצא ממנו (onchange מופעל רק ביציאה מהשדה) יצר פער:
+   התג הראה ✓ 100% וההודעה סירבה לסגור בטענה ש-92%. שני מספרים שונים על
+   אותו מסך. עכשיו ההקלדה עצמה נשמרת אחרי רגע קצר, וכל סגירה מחייבת קודם
+   את מה שכתוב בשדות ורק אז בודקת. */
+let wtT={};
+function wtInput(sid,u,i,el){
+  liveTot(sid,u);                       // התג זז מיד, תוך כדי הקלדה
+  const k=sid+'.'+u+'.'+i;
+  clearTimeout(wtT[k]);
+  wtT[k]=setTimeout(()=>{ delete wtT[k]; setCustom(sid,u,i,'w',el.value); },450);
+}
+function wtCommit(sid,u,i,el){
+  const k=sid+'.'+u+'.'+i;
+  clearTimeout(wtT[k]); delete wtT[k];
+  setCustom(sid,u,i,'w',el.value);
+}
+/* מחיל על המצב כל מה שכתוב כרגע בשדות המשקל של המקצוע. מחזיר כמה השתנו. */
+function flushWeights(sid){
+  Object.keys(wtT).forEach(k=>{ if(k.indexOf(sid+'.')===0){ clearTimeout(wtT[k]); delete wtT[k]; } });
+  const sj=SUBJ_MAP[sid]; if(!sj||typeof document==='undefined') return 0;
+  let n=0;
+  let els=[];
+  try{ els=document.querySelectorAll('[data-wi^="'+sid+'."]')||[]; }catch(e){ els=[]; }
+  Array.prototype.forEach.call(els,el=>{
+    const parts=String(el.getAttribute&&el.getAttribute('data-wi')||'').split('.');
+    if(parts.length<3) return;
+    const i=+parts[parts.length-1], u=+parts[parts.length-2];
+    if(!Number.isFinite(u)||!Number.isFinite(i)) return;
+    const v=numOr(el.value,0,100,undefined); if(v===undefined) return;
+    const cur=(getComps(sj,u)[i]||{}).w;
+    if(+cur!==+v){ setCustom(sid,u,i,'w',el.value); n++; }
+  });
+  return n;
+}
+/* מצייר מחדש את כל תגי הסיכום של המקצוע — מהמצב השמור, לא מהשדות */
+function repaintTotals(sid){
+  const sj=SUBJ_MAP[sid]; if(!sj||typeof document==='undefined') return;
+  sj.opts.filter(u=>u>0).forEach(u=>{
+    const b=document.getElementById('wt:'+sid+'.'+u);
+    if(b) b.innerHTML=wtBadge(levelTotal(sid,u));
+  });
+}
 /* האם יש רמה שהרכזת נגעה בה ושסכומה אינו 100? */
 function badLevels(sid){
   const sj=SUBJ_MAP[sid], out=[]; if(!sj) return out;
@@ -6611,9 +6656,10 @@ function settingsSubj(subj){
         <span id="or:${ck}">${c.n!==base?`<div class="note" style="margin-top:2px;">במקור: ${esc(base)}
           <a style="color:var(--brand); cursor:pointer; font-weight:700;"
              onclick="setCompName('${subj.id}',${u},${i},'')">↺ איפוס</a></div>`:''}</span></td>
-      <td><input type="number" min="0" max="100" value="${c.w}" data-wt="${subj.id}.${u}"
-            oninput="liveTot('${subj.id}',${u})"
-            onchange="setCustom('${subj.id}',${u},${i},'w',this.value)">${savedTag(ck+'|w')}</td>
+      <td><input type="number" min="0" max="100" step="0.5" value="${c.w}"
+            data-wt="${subj.id}.${u}" data-wi="${subj.id}.${u}.${i}"
+            oninput="wtInput('${subj.id}',${u},${i},this)"
+            onchange="wtCommit('${subj.id}',${u},${i},this)">${savedTag(ck+'|w')}</td>
       <td>${subj.user?(i<((xSubj(subj.id)||{comps:[]}).comps.length)
         ?`<select onchange="setXCompType('${subj.id}',${i},this.value)">
             <option value="i" ${c.t==='i'?'selected':''}>הערכה פנימית</option>
@@ -6645,6 +6691,7 @@ function settingsSubj(subj){
    הוא נותן את מה שבאמת חסר: אישור מפורש שהמבנה תקין, במקום אמון עיוור. */
 function saveSubjStruct(sid){
   const sj=SUBJ_MAP[sid]||{name:sid};
+  flushWeights(sid); repaintTotals(sid);   // מה שכתוב בשדות הוא מה שנבדק
   const bad=badLevels(sid);
   if(bad.length){
     const lines=bad.map(b=>'  • '+b.u+' יח"ל: סה"כ '+b.tot+'% ('+
@@ -7821,7 +7868,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='17.0';
+const APP_VERSION='17.1';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
