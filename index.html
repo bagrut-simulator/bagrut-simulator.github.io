@@ -3136,6 +3136,14 @@ function getUnits(st,subj){
   if(subj.opts.indexOf(0)>-1) return 0;
   return subj.opts[subj.opts.length-1];
 }
+/* חלוקות מגן/בחינה. הרשימה הייתה [70,60,50,40,30,20,0] וחסרו בה 80/90/100/10 —
+   וגם "מגן בלבד", מצב קיים במקצועות שבהם אין בחינה חיצונית באותו מועד. */
+const SPLITS=[100,90,80,70,60,50,40,30,20,10,0];
+function splitLbl(sv){
+  if(sv===0)   return 'ללא מגן — 100% בחינה';
+  if(sv===100) return 'מגן בלבד — ללא בחינה';
+  return 'מגן '+sv+'% / בחינה '+(100-sv)+'%';
+}
 let _compCache={};
 function clearCompCache(){ _compCache={}; }
 function getComps(subj,u){
@@ -4398,7 +4406,7 @@ function studentSubjEditor(st,subj){
       const flBadge=fl?` <span class="badge b-warn" title="ציון הבחינה (${fl.e}) גבוה מהמגן (${fl.m}) — המשקל הגדול עבר לבחינה: מגן ${fl.s}% / בחינה ${100-fl.s}%">🔀 היפוך לטובת הבחינה</span>`:'';
       const sSel=`<select style="font-size:11px; ${sOv?'border-color:var(--brand2); background:#f5f3ff; font-weight:700;':''}" onchange="setOv('${st.id}','${key}','s',this.value)">
         <option value="">מגן ${baseComps[i].s}/${100-baseComps[i].s} (רגיל)</option>
-        ${[70,60,50,40,30,20,0].map(s=>`<option value="${s}" ${sOv&&+po.s===s?'selected':''}>מגן ${s}% / בחינה ${100-s}%</option>`).join('')}</select>`;
+        ${SPLITS.map(s=>`<option value="${s}" ${sOv&&+po.s===s?'selected':''}>${splitLbl(s)}</option>`).join('')}</select>`;
       const eff=c.s;  // אחוז המגן בפועל
       const det=(r.details||[])[i];
       const cVal=det&&det.val!==null&&det.val!==undefined?det.val:null;
@@ -6666,7 +6674,7 @@ function settingsSubj(subj){
             <option value="e" ${c.t==='e'?'selected':''}>בחינה חיצונית</option></select>`
         :'<span class="note">רכיב שיפור</span>'):''}</td>
       <td>${c.t==='e'?`<select onchange="setCustom('${subj.id}',${u},${i},'s',this.value)">
-        ${[70,60,50,40,30,20,0].map(s=>`<option value="${s}" ${c.s===s?'selected':''}>מגן ${s}% / בחינה ${100-s}%</option>`).join('')}
+        ${SPLITS.map(s=>`<option value="${s}" ${c.s===s?'selected':''}>${splitLbl(s)}</option>`).join('')}
       </select>`:'<span class="note">הערכה פנימית — ציון אחד</span>'}</td>
       <td><input type="text" inputmode="numeric" value="${esc(def)}" placeholder="למשל 2311" style="width:110px;"
             onchange="setCompCode('${subj.id}',${u},${i},this.value)"
@@ -7868,7 +7876,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='17.1';
+const APP_VERSION='17.2';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -9113,6 +9121,18 @@ function goHelp(id){
    היה גוש אחד של עשרים בעיות שנפרשו כולן על המסך בבת אחת. עכשיו רשימת
    שאלות סגורה, והתשובה נפתחת רק בלחיצה — אותה התנהגות כמו שאר המדריך. */
 const FAQ=[
+  [`איך מוסיפים מגן + בחינה לרכיב שיש בו רק בחינה?`,
+   `דרך השדה <b>חלוקה</b> שמתחת לכל רכיב חיצוני. בתושב"ע, למשל, שלושת הרכיבים
+    החיצוניים מוגדרים "ללא מגן — 100% בחינה", וברגע שבוחרים חלוקה אחרת (למשל
+    <b>מגן 30% / בחינה 70%</b>) נפתח גם שדה <b>ציון מגן</b>, והציון מחושב משוקלל:
+    מגן 90 ובחינה 60 בחלוקת 30/70 נותנים 90×0.3 + 60×0.7 = <b>69</b>.<br>
+    יש שני מקומות, והם לא אותו דבר:<br>
+    <b>א. לכל התלמידות</b> — הגדרות ← מבנה המקצועות ← המקצוע ← עמודת "חלוקת מגן/בחינה".
+    זו ברירת המחדל של המוסד, והיא חלה גם על תלמידות שיתווספו בעתיד.<br>
+    <b>ב. לתלמידה אחת</b> — בכרטיס התלמידה, השדה "חלוקה" בתוך הרכיב. ההתאמה האישית
+    גוברת על ברירת המחדל אצלה בלבד ואינה משנה אותה לאף אחת אחרת.<br>
+    אפשר גם <b>מגן בלבד — ללא בחינה</b>, למועד שבו אין בחינה חיצונית. רכיב כזה נחשב
+    שלם בלי ציון בחינה, ולא יסומן כחסר.`],
   [`המקצוע שלי לא ברשימה — איך מוסיפים?`,
    `<b>הגדרות ← מבנה המקצועות ← ➕ הוספת מקצוע חדש</b>. את נותנת שם, קובעת את רמות היח"ל
     (למשל 3, 5) ובונה את הרכיבים: שם הרכיב, המשקל באחוזים, אם הוא הערכה פנימית או בחינה
