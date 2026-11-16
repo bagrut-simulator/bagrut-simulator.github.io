@@ -488,6 +488,10 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
 .chartbox{position:relative; height:280px;}
 .chartbox.tall{height:420px;}
 .focusCard{border:2px solid #9333ea; box-shadow:0 4px 18px rgba(147,51,234,.10);}
+.deadCell{background:repeating-linear-gradient(135deg,#fff7ed,#fff7ed 6px,#ffedd5 6px,#ffedd5 12px);}
+.deadCell input{border-color:#fb923c !important; color:#9a3412; text-decoration:line-through;}
+.deadTag{font-size:10px; font-weight:800; color:#9a3412; background:#ffedd5; border:1px solid #fdba74;
+  border-radius:6px; padding:1px 5px; margin-top:3px; white-space:nowrap; text-align:center;}
 .thW{font-weight:700; color:var(--brand); opacity:.85;}
 .thW.off{color:var(--muted); font-weight:400;}
 .subj-card{border:1px solid var(--line); border-radius:13px; margin-bottom:11px; overflow:hidden; box-shadow:0 2px 10px rgba(30,41,80,.05);}
@@ -4667,6 +4671,17 @@ function renderEntry(m){
       <button class="btn ok sm" onclick="applyEntryColor()">${ic('check',13)}החל על ${studs.length} תלמידות${fltOn()?' (המסוננות)':''}</button>
     </div>
   </div>`:''}
+  ${(()=>{ if(entryFull) return '';
+    const dg=deadGrades(subj,studs);
+    if(!dg.length) return '';
+    const nSt=new Set(dg.map(x=>x.st.id)).size;
+    const names=[...new Set(dg.map(x=>x.comp.n))].slice(0,3).map(esc).join(', ');
+    return `<div class="alert-item al-warn" style="margin-bottom:12px;">
+      <span>${ic('warn',15)}</span>
+      <span><b>${dg.reduce((a,x)=>a+x.n,0)} ציונים ב${esc(subj.name)} אינם נכנסים לחישוב</b> —
+        הם הוזנו ברכיב שמשקלו 0 (${names}), אצל ${nSt} ${nSt===1?'תלמידה':'תלמידות'}.
+        בטבלה הם מסומנים בכתום עם קו חוצה. או שתתני לרכיב משקל, או שתמחקי את הציון.</span></div>`;
+  })()}
   ${(!entryFull&&simCount())?`<div class="simNote">${ic('lab',14)}<span>יש <b>${simCount()}</b> שינויי ניסוי בסימולציה — הם <b>אינם מוצגים כאן</b> ואינם משפיעים על הציונים שבטבלה הזאת.</span>
     <button class="btn sec sm" onclick="setTab('sim')">${ic('arrowLeft',13)}לסימולציה</button></div>`:''}
   <div class="card ${entryFull?'tblfull':''} ${entryDense?'dense':''}" id="entryCard">
@@ -4988,13 +5003,21 @@ function entryGrid(subj,studs){
       const c=comps[i];
       /* "—" היה אילם: אותו קו בדיוק הופיע גם לתלמידה שאינה לומדת את המקצוע
          וגם לרכיב שמשקלו 0, ונראה כאילו התוכנה פשוט "לא נותנת" להזין. */
-      if(u===0||!c||!c.w){
+      const key=subj.id+'.'+i, g=st.grades||{};
+      /* רכיב במשקל 0 שיש בו ציון — חייב להמשיך להופיע.
+         אחרת ציון אמיתי שהוזן נעלם מהמסך שבו עובדים, נשאר בנתונים, ואינו
+         נכנס לחישוב — בלי שאף אחד יודע. זה קרה אצל תלמידה עם התאמה אישית
+         ששמה 0 ברכיב שכבר היה בו ציון 99. */
+      const hasVal=(c&&c.t==='i')?(g[key]!==undefined&&g[key]!==null)
+                  :(g[key+'.m']!==undefined&&g[key+'.m']!==null)||(g[key+'.e']!==undefined&&g[key+'.e']!==null);
+      if(u===0||!c||(!c.w&&!hasVal)){
         const why=u===0
           ? 'התלמידה אינה לומדת את המקצוע. לשינוי: עמודת יח״ל בשורה הזאת.'
           : 'משקל הרכיב ״'+esc(hc.n||'')+'״ הוא 0, ולכן הוא אינו חלק מהציון ואין מה להזין בו. '+
             'לשינוי: הגדרות ← מבנה המקצועות ← '+esc(subj.name)+' ← משקל %.';
         tds+='<td class="cEmpty" title="'+why+'">—</td>'; return; }
-      const key=subj.id+'.'+i, g=st.grades||{};
+      const dead=!c.w;   // יש ציון, אבל המשקל 0 — הציון אינו נספר
+      const deadTag=dead?`<div class="deadTag" title="משקל הרכיב אצל ${esc(st.name)} הוא 0, ולכן הציון הזה אינו נכנס לחישוב. או שתתני לרכיב משקל, או שתמחקי את הציון.">⚠️ 0% — אינו נספר</div>`:'';
       const nt=noteOf(st,key);
       const kc=k=>((g[k]==null?'cell-miss':'')+gstatCls(st,k));
       const ct=k=>`oncontextmenu="event.preventDefault();cycleGstat('${st.id}','${k}')" title="לחיצה ימנית (או הנקודה הצבעונית): שחור→אדום→כחול"`;
@@ -5006,7 +5029,7 @@ function entryGrid(subj,studs){
         ? `<button class="rowCode${myCode?'':' empty'}" onclick="pickCode('${st.id}','${key}')" title="${myCode?('סמל שאלון '+esc(myCode)+' — לחצי לשינוי'):'בחירת סמל שאלון'}">${myCode?esc(codeShort(myCode)):'סמל +'}</button>`
         : ''}</div>`;
       if(c.t==='i'){
-        tds+=`<td class="${nt?'hasNote':''}"><div class="eWrap">${codeTag}${noteBtn(st,key,subj.name+' · '+(c.n||''))}${nt?noteChip(st.id,key):''}<div class="eBox one"><div class="gcell"><small>&nbsp;</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}" class="${kc(key)}" ${ct(key)} value="${g[key]??''}" onchange="setGrade('${st.id}','${key}',this.value)">${dot(key)}</div></div></div></td>`;
+        tds+=`<td class="${nt?'hasNote':''}${dead?' deadCell':''}"><div class="eWrap">${codeTag}${noteBtn(st,key,subj.name+' · '+(c.n||''))}${nt?noteChip(st.id,key):''}<div class="eBox one"><div class="gcell"><small>&nbsp;</small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}" class="${kc(key)}" ${ct(key)} value="${g[key]??''}" onchange="setGrade('${st.id}','${key}',this.value)">${dot(key)}</div></div>${deadTag}</div></td>`;
       }else{
         const eff=c.s;
         const flipped=(r.flips||[]).some(f=>f.comp===c.n);
@@ -5014,12 +5037,12 @@ function entryGrid(subj,studs){
         // בטלפון האחוזים מוסתרים — הם חוזרים על עצמם בכל שורה. אבל שורה עם חלוקה
         // חריגה (התאמה אישית או היפוך) שומרת אותם, כדי ששינוי לא ייעלם בשקט.
         const pc=(c._custom||flipped)?'pct keep':'pct';
-        const rM=eff>0?`<div class="gcell"><small>מגן <span class="${pc}">${eSplit}%</span></small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}.m" class="${kc(key+'.m')}" ${ct(key+'.m')} value="${g[key+'.m']??''}" onchange="setGrade('${st.id}','${key}.m',this.value)">${dot(key+'.m')}</div>`:'';
+        const rM=(eff>0||(dead&&g[key+'.m']!==undefined&&g[key+'.m']!==null))?`<div class="gcell"><small>מגן <span class="${pc}">${eSplit}%</span></small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}.m" class="${kc(key+'.m')}" ${ct(key+'.m')} value="${g[key+'.m']??''}" onchange="setGrade('${st.id}','${key}.m',this.value)">${dot(key+'.m')}</div>`:'';
         const rE=eff<100?`<div class="gcell"><small>בחינה <span class="${pc}">${100-eSplit}%</span></small><input type="number" min="0" max="100" data-k="g|${st.id}|${key}.e" class="${kc(key+'.e')}" ${ct(key+'.e')} value="${g[key+'.e']??''}" onchange="setGrade('${st.id}','${key}.e',this.value)">${dot(key+'.e')}</div>`:'';
         const det=(r.details||[])[i], cv=(det&&det.val!==null&&det.val!==undefined)?Math.round(det.val):null;
         const flip=(r.flips||[]).some(f=>f.comp===c.n);
         const avgRow=(rM&&rE)?`<div class="eAvg${cv===null?' pend':''}" title="${flip?'היפוך אחוזים לטובת הבחינה':'משוקלל לפי החלוקה שהוגדרה'}">${cv===null?'<span class="lbl">ממתין לשני הציונים</span>':`${flip?'🔀 ':''}<span class="lbl">משוקלל </span><b>${cv}</b>`}</div>`:'';
-        tds+=`<td class="${nt?'hasNote':''}"><div class="eWrap">${codeTag}${noteBtn(st,key,subj.name+' · '+(c.n||''))}${nt?noteChip(st.id,key):''}<div class="eBox">${rM}${rE}</div>${avgRow}${moeChip(st,key)}</div></td>`;
+        tds+=`<td class="${nt?'hasNote':''}${dead?' deadCell':''}"><div class="eWrap">${codeTag}${noteBtn(st,key,subj.name+' · '+(c.n||''))}${nt?noteChip(st.id,key):''}<div class="eBox">${rM}${rE}</div>${avgRow}${deadTag}${moeChip(st,key)}</div></td>`;
       }
     });
     const flIc=(r.flips&&r.flips.length)?' <span title="היפוך אחוזים לטובת הבחינה ב: '+esc(r.flips.map(f=>f.comp).join(', '))+'">🔀</span>':'';
@@ -5030,6 +5053,24 @@ function entryGrid(subj,studs){
   return `<table class="tbl grades"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
 }
 
+/* ══ ציונים שאינם נכנסים לחישוב ══
+   ציון שהוזן ברכיב שמשקלו 0 יושב בנתונים, אינו משפיע על כלום, ועד עכשיו
+   גם לא נראה בטבלה. שילוב מסוכן: נראה כאילו הציון אבד. */
+function deadGrades(subj,studs){
+  const out=[];
+  (studs||[]).forEach(st=>{
+    const u=getUnits(st,subj); if(!u) return;
+    const comps=getCompsFor(st,subj,u), g=st.grades||{};
+    comps.forEach((c,i)=>{
+      if(c.w) return;
+      const key=subj.id+'.'+i;
+      const vals=(c.t==='i')?[g[key]]:[g[key+'.m'],g[key+'.e']];
+      const n=vals.filter(v=>v!==undefined&&v!==null).length;
+      if(n) out.push({st,comp:c,i,n});
+    });
+  });
+  return out;
+}
 /* ============ ייבוא ציונים למקצוע בודד (הדבקה מוורד/אקסל או קובץ) ============ */
 let gi={subj:'',comp:0,target:'e',rows:[],map:{},color:'',order:'auto',detected:''};
 function normName(s){
@@ -7876,7 +7917,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='17.2';
+const APP_VERSION='17.3';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
