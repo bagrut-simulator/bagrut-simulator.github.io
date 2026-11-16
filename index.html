@@ -4059,6 +4059,7 @@ function renderDash(m){
     ${kpiCard('k6','chart',partialMode?pAvg:avgAll,'ממוצע שכבתי',partialMode?pAvg:avgAll,
       partialMode?'כולל ציונים חלקיים':'',true)}
   </div>`:''}
+  ${n?deadPanel():''}
   ${n?focusPanel(results):''}
   ${n?`<div class="card" style="margin-bottom:16px; padding:${openBoxes.rings===false?'10px 17px':'17px'};">
     <div class="secHead" style="margin-bottom:${openBoxes.rings===false?'0':'10px'}; cursor:pointer;" onclick="toggleRings()">
@@ -5071,6 +5072,100 @@ function deadGrades(subj,studs){
   });
   return out;
 }
+/* ══════════ סריקה גורפת: ציונים שאינם נכנסים לחישוב ══════════
+   במודל יש 36 רכיבים שמשקלם 0 כברירת מחדל — רכיב "עבודה נוספת" בכל מקצוע,
+   רכיבי ההגבר בתנ"ך ובתושב"ע ב-3 יח"ל, הערכה פנימית במתמטיקה 4-5, ובחינות
+   ב׳/ג׳ במקצועות המוגברים. ציון שהוזן באחד מהם — ביד או בייבוא — יושב
+   בנתונים ואינו משפיע על כלום. אסור שהרכזת תצטרך לחפש אותם מקצוע-מקצוע. */
+function scanDead(){
+  const out=[];
+  SUBJECTS.forEach(subj=>{
+    (state.students||[]).forEach(st=>{
+      const u=getUnits(st,subj); if(!u) return;
+      const comps=getCompsFor(st,subj,u), g=st.grades||{};
+      comps.forEach((c,i)=>{
+        if(c.w) return;
+        const key=subj.id+'.'+i;
+        const parts=(c.t==='i')?[{k:key,lbl:'ציון'}]
+                               :[{k:key+'.m',lbl:'מגן'},{k:key+'.e',lbl:'בחינה'}];
+        const vals=parts.filter(x=>g[x.k]!==undefined&&g[x.k]!==null)
+                        .map(x=>({k:x.k,lbl:x.lbl,v:g[x.k]}));
+        if(!vals.length) return;
+        const po=(st.ov||{})[key];
+        const src=(po&&po.w!==undefined&&+po.w===0)?'ov':'inst';
+        out.push({st,subj,u,comp:c,i,key,vals,src});
+      });
+    });
+  });
+  return out;
+}
+function deadDrop(stId,keys){
+  const st=(state.students||[]).find(x=>x.id===stId); if(!st) return;
+  const ks=String(keys).split(',');
+  if(!confirm('למחוק '+ks.length+' ציונים של '+st.name+'?\n\n'+
+    'הם אינם נכנסים לחישוב ממילא. אפשר לבטל עם ↩️ בטל.')) return;
+  pushUndo('מחיקת ציונים שאינם נספרים · '+st.name);
+  ks.forEach(k=>{ delete (st.grades||{})[k]; delete (st.gstat||{})[k]; });
+  save(); render(); toast(ks.length+' ציונים נמחקו');
+}
+function deadUnOv(stId,key){
+  const st=(state.students||[]).find(x=>x.id===stId); if(!st) return;
+  const po=(st.ov||{})[key]; if(!po) return;
+  pushUndo('ביטול התאמה אישית · '+st.name);
+  delete po.w;
+  if(!Object.keys(po).length) delete st.ov[key];
+  save(); render();
+  toast('ההתאמה האישית בוטלה — הרכיב חזר למשקל של המוסד');
+}
+function deadToStruct(sid){
+  openBoxes['sj_'+sid]=true;
+  setTab('settings');
+  setTimeout(()=>{ try{
+    const e=document.getElementById('wt:'+sid+'.'+(SUBJ_MAP[sid]||{opts:[0]}).opts.filter(u=>u>0)[0]);
+    if(e&&e.scrollIntoView) e.scrollIntoView({behavior:'smooth',block:'center'});
+  }catch(x){} },120);
+}
+let deadAll=false;
+function deadPanel(){
+  const list=scanDead();
+  if(!list.length) return '';
+  const shown=deadAll?list:list.slice(0,20);
+  const nG=list.reduce((a,x)=>a+x.vals.length,0);
+  const nSt=new Set(list.map(x=>x.st.id)).size;
+  const bySubj={};
+  list.forEach(x=>{ bySubj[x.subj.name]=(bySubj[x.subj.name]||0)+x.vals.length; });
+  return `<div class="card" style="margin-bottom:16px; border:2px solid #f97316; box-shadow:0 4px 18px rgba(249,115,22,.12);">
+    ${secHead('warn','ציונים שאינם נכנסים לחישוב',
+      'הוזנו ברכיב שמשקלו 0 — קיימים בנתונים, ולא משפיעים על שום ציון',
+      `<span class="pill" style="background:#ffedd5; color:#9a3412; border-color:#fdba74;">${nG} ציונים · ${nSt} תלמידות</span>`)}
+    <div class="note" style="margin-bottom:9px;">
+      ${Object.keys(bySubj).map(k=>esc(k)+' ('+bySubj[k]+')').join(' · ')}.
+      לכל שורה שתי דרכי תיקון: לתת לרכיב משקל כדי שהציון ייספר, או למחוק את הציון.
+    </div>
+    <div class="scroll" style="max-height:48vh;">
+    <table class="tbl"><thead><tr>
+      <th>תלמידה</th><th>מקצוע</th><th>רכיב</th><th>הציון</th><th>המקור</th><th>תיקון</th>
+    </tr></thead><tbody>
+    ${shown.map(x=>`<tr>
+      <td><span class="name-link" onclick="openStudent('${x.st.id}')">${esc(x.st.name)}</span>
+        <br><small style="color:var(--muted)">${esc(x.st.cls)}</small></td>
+      <td>${esc(x.subj.name)}<br><small style="color:var(--muted)">${x.u} יח"ל</small></td>
+      <td>${esc(x.comp.n)}</td>
+      <td>${x.vals.map(v=>`<span class="badge b-warn" style="text-decoration:line-through;">${v.lbl} ${v.v}</span>`).join(' ')}</td>
+      <td>${x.src==='ov'
+        ? '<span class="pill" style="background:#f5f3ff; color:#5b21b6;">התאמה אישית לתלמידה</span>'
+        : '<span class="pill">מבנה המוסד</span>'}</td>
+      <td><div style="display:flex; gap:5px; flex-wrap:wrap;">
+        ${x.src==='ov'
+          ? `<button class="btn ok sm" onclick="deadUnOv('${x.st.id}','${x.key}')" title="הרכיב יחזור למשקל שהוגדר למוסד, והציון ייספר">ביטול ההתאמה</button>`
+          : `<button class="btn sec sm" onclick="deadToStruct('${x.subj.id}')" title="פתיחת מבנה המקצוע כדי לתת לרכיב משקל">למבנה המקצוע</button>`}
+        <button class="btn dz sm" onclick="deadDrop('${x.st.id}','${x.vals.map(v=>v.k).join(',')}')">מחיקת הציון</button>
+      </div></td></tr>`).join('')}
+    </tbody></table></div>
+    ${list.length>20?`<button class="btn sec sm" style="margin-top:9px;" onclick="deadAll=!deadAll;renderKeepScroll()">
+      ${deadAll?'▴ הצגת 20 הראשונים':'▾ הצגת כל '+list.length+' השורות'}</button>`:''}
+  </div>`;
+}
 /* ============ ייבוא ציונים למקצוע בודד (הדבקה מוורד/אקסל או קובץ) ============ */
 let gi={subj:'',comp:0,target:'e',rows:[],map:{},color:'',order:'auto',detected:''};
 function normName(s){
@@ -5962,6 +6057,7 @@ function predictionPanel(studs){
 /* ============ התראות ============ */
 function renderAlerts(m){
   const studs=filteredStudents(alertClass);
+  const deadHtml=deadPanel();
   const rows=[];
   studs.forEach(st=>{
     const r=calcStudent(st);
@@ -5991,6 +6087,7 @@ function renderAlerts(m){
   ${hero('bell','התראות','מי דורשת טיפול עכשיו — נגזר אוטומטית מהציונים',
     [`<button class="btn sec sm" onclick="setTab('entry')">${ic('pen',14)}הזנת ציונים</button>`,
      `<button class="btn sec sm" onclick="setTab('reports')">${ic('file',14)}דוח</button>`],'bell')}
+  ${deadHtml}
   <div class="alGrid">
     ${sum('bad','warn','מעכבים',nBad,'bad',nStud('bad')+' תלמידות')}
     ${sum('warn','trend','גבוליים ופערים',nWarn,'warn',nStud('warn')+' תלמידות')}
@@ -7917,7 +8014,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='17.3';
+const APP_VERSION='17.4';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
