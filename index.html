@@ -4092,11 +4092,13 @@ function renderDash(m){
 }
 function avgOf(arr){ return arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10:null; }
 function topTable(results){
-  const rows=results.filter(x=>x.r.avg!==null).sort((a,b)=>b.r.avg-a.r.avg).slice(0,15);
+  const GM=gradeMode(results);
+  const rows=results.filter(x=>GM.score(x.r)!==null&&GM.score(x.r)!==undefined)
+                    .sort((a,b)=>GM.score(b.r)-GM.score(a.r)).slice(0,15);
   if(!rows.length) return '<div class="note">אין עדיין ציונים</div>';
-  return `<table class="tbl grades"><thead><tr><th>#</th><th>שם</th><th class="cCls">כיתה</th><th>ממוצע משוקלל</th><th>יח"ל</th><th>סטטוס</th></tr></thead><tbody>
+  return `<table class="tbl grades"><thead><tr><th>#</th><th>שם</th><th class="cCls">כיתה</th><th>ממוצע${GM.partial?' צפי':' משוקלל'}</th>${GM.partial?'<th>כיסוי</th>':''}<th>יח"ל</th><th>סטטוס</th></tr></thead><tbody>
   ${rows.map((x,i)=>`<tr><td>${i+1}</td><td><span class="name-link" onclick="openStudent('${x.st.id}')">${esc(x.st.name)}</span></td><td class="cCls">${esc(x.st.cls)}</td>
-   <td class="${gradeClass(x.r.avg)}">${x.r.avg}</td><td>${x.r.totalUnits}</td><td class="status-cell"><span class="badge ${x.r.cls}">${x.r.status}</span></td></tr>`).join('')}
+   <td class="${gradeClass(GM.score(x.r))}">${fmt(GM.score(x.r))}</td>${GM.partial?`<td><span class="pill">${x.r.coverage||0}%</span></td>`:''}<td>${x.r.totalUnits}</td><td class="status-cell"><span class="badge ${GM.cls(x.r)}">${GM.status(x.r)}</span></td></tr>`).join('')}
   </tbody></table>`;
 }
 const PALETTE=['#9333ea','#f59e0b','#10b981','#b0335a','#94a3b8','#64748b'];
@@ -4151,9 +4153,10 @@ function classSummary(){
   const cards=state.classes.map(c=>{
     const ss=state.students.filter(s=>s.cls===c);
     const rs=ss.map(s=>calcStudent(s));
-    const avg=avgOf(rs.map(r=>r.avg).filter(v=>v!==null));
-    const exc=rs.filter(r=>r.excellent).length;
-    const bad=rs.filter(r=>r.blockers.length>0).length;
+    const gmC=gradeMode(rs.map(r=>({st:null,r})));
+    const avg=gmC.avg;
+    const exc=gmC.exc;
+    const bad=gmC.risk;
     const miss=rs.filter(r=>r.missing.length>0).length;
     return `<div class="clsCard">
       <div class="ccTop"><span class="ccName">${esc(c)}</span>
@@ -4902,13 +4905,16 @@ function fltApply(studs,subj){
     });
   }
   if(flt.stat){
+    /* הסינון לפי סטטוס חייב להסכים עם מה שהמסך מראה. אחרת הדשבורד מציג
+       4 מצטיינות, ולחיצה על "מצטיינות" בסינון מחזירה רשימה ריקה. */
+    const gmF=gradeMode((state.students||[]).map(x=>({st:x,r:calcStudent(x)})));
     out=out.filter(st=>{
       const r=calcStudent(st);
       switch(flt.stat){
-        case 'exc':  return r.excellent;
-        case 'pot':  return r.potential;
-        case 'elig': return r.eligible;
-        case 'bad':  return r.blockers.length>0;
+        case 'exc':  return gmF.is(r,'exc');
+        case 'pot':  return gmF.is(r,'pot');
+        case 'elig': return gmF.is(r,'elig');
+        case 'bad':  return gmF.is(r,'risk');
         case 'brd':  return !!r.borderline;
         case 'inc':  return r.missing.length>0;
         default:     return true;
@@ -5884,6 +5890,43 @@ function calcPanel(studs){
   </div>`;
 }
 
+/* ══════════ מצב השכבה: סופי או צפי ══════════
+   את הדשבורד תיקנתי ב-16.0, את הסימולציה ב-16.6, ואת הדוחות לא תיקנתי כלל —
+   ולכן אותה שכבה בדיוק הראתה 4 מצטיינות בדשבורד ו-0 בדוח. הבעיה לא הייתה
+   בדוח אלא בכך שכל מסך חישב את המצב בעצמו. כאן יש מקור אחד, וכל המסכים
+   קוראים ממנו. */
+function gradeMode(results){
+  const R=results||[];
+  const n=R.length;
+  const fElig=R.filter(x=>x.r.eligible).length;
+  const pElig=R.filter(x=>x.r.projEligible).length;
+  const cov=n?Math.round(avgOf(R.map(x=>x.r.coverage||0))||0):0;
+  const partial=n>0&&((fElig===0&&pElig>0)||cov<95);
+  const pick=(r,k)=>partial
+    ? ({elig:!!r.projEligible,exc:!!r.projExcellent,pot:!!r.projPotential,
+        risk:!!(r.projBlockers&&r.projBlockers.length)})[k]
+    : ({elig:!!r.eligible,exc:!!r.excellent,pot:!!r.potential,
+        risk:r.blockers.length>0})[k];
+  const list=k=>R.filter(x=>pick(x.r,k));
+  return {
+    partial, cov, n,
+    finalElig:fElig,
+    eligList:list('elig'), excList:list('exc'), potList:list('pot'), riskList:list('risk'),
+    elig:list('elig').length, exc:list('exc').length,
+    pot:list('pot').length, risk:list('risk').length,
+    avg:avgOf(R.map(x=>partial?x.r.projAvg:x.r.avg).filter(v=>v!==null&&v!==undefined)),
+    is:pick,
+    score:r=>partial?r.projAvg:r.avg,
+    status:r=>partial?r.projStatus:r.status,
+    cls:r=>partial?r.projCls:r.cls,
+    lbl:k=>partial
+      ? ({elig:'בדרך לזכאות',exc:'בדרך להצטיינות',pot:'בדרך לפוטנציאל',risk:'בסיכון'})[k]
+      : ({elig:'זכאיות',exc:'מצטיינות',pot:'פוטנציאל',risk:'עם מעכבים'})[k],
+    note:()=>partial
+      ? 'הציונים עדיין חלקיים — '+cov+'% מהמשקל הוזן. המספרים כאן הם צפי לפי מה שכבר הוזן, ולא סיווג סופי.'
+      : ''
+  };
+}
 /* ══════════ "מי קרובה להצטיינות — ומה בדיוק צריך" ══════════
    calcPanel ו-predictionPanel דורשים שכל הציונים יהיו במקום (complete), ושניהם
    יושבים במסך הסימולציה. התוצאה: באמצע השנה, כשהשאלה הזאת הכי חשובה, אין
@@ -6187,11 +6230,9 @@ function buildReportHtml(cls){
        :'אין תלמידות בסימולטור, או שהסינון הפעיל לא מחזיר אף אחת.',null,
     [`<button class="btn sec" onclick="setTab('students')">${ic('users2',15)}לתלמידות</button>`,
      `<button class="btn sec" onclick="fltClear()">${ic('x',15)}ניקוי הסינון</button>`]);
-  const elig=results.filter(x=>x.r.eligible).length;
-  const exc=results.filter(x=>x.r.excellent);
-  const pot=results.filter(x=>x.r.potential);
-  const blocked=results.filter(x=>x.r.blockers.length>0);
-  const avgAll=avgOf(results.map(x=>x.r.avg).filter(v=>v!==null));
+  const GM=gradeMode(results);
+  const elig=GM.elig, exc=GM.excList, pot=GM.potList, blocked=GM.riskList;
+  const avgAll=GM.avg;
   const today=new Date().toLocaleDateString('he-IL');
   const subjAvgs=SUBJECTS.map(sub=>{const vs=results.map(x=>x.r.per[sub.id]).filter(r=>r&&r.active&&r.final!==null).map(r=>r.final); return {name:sub.name,avg:avgOf(vs)};}).filter(x=>x.avg!==null);
   const att=attentionRows(results);
@@ -6208,13 +6249,15 @@ function buildReportHtml(cls){
       <span><b>מקור</b>${esc(appTitle())}${isLicensed()?' · '+esc(licName):''}</span>
     </span>
   </div>
+  ${GM.partial?`<div class="note" style="margin:0 0 10px; padding:9px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:9px; color:#1e40af;">
+    <b>${esc(GM.note())}</b>${GM.finalElig?' כרגע '+GM.finalElig+' תלמידות כבר זכאיות סופית.':''}</div>`:''}
   <div class="kpis" id="rSum">
     <div class="kpi k1"><div class="n">${n}</div><div class="t">תלמידות</div></div>
-    <div class="kpi k2"><div class="n">${elig} (${Math.round(elig/n*100)}%)</div><div class="t">זכאיות</div></div>
-    <div class="kpi k4"><div class="n">${exc.length}</div><div class="t">מצטיינות</div></div>
-    <div class="kpi k3"><div class="n">${pot.length}</div><div class="t">פוטנציאל</div></div>
-    <div class="kpi k5"><div class="n">${blocked.length}</div><div class="t">עם מעכבים</div></div>
-    <div class="kpi k6"><div class="n">${avgAll===null?'—':avgAll}</div><div class="t">ממוצע</div></div>
+    <div class="kpi k2"><div class="n">${elig} (${Math.round(elig/n*100)}%)</div><div class="t">${GM.lbl('elig')}</div></div>
+    <div class="kpi k4"><div class="n">${exc.length}</div><div class="t">${GM.lbl('exc')}</div></div>
+    <div class="kpi k3"><div class="n">${pot.length}</div><div class="t">${GM.lbl('pot')}</div></div>
+    <div class="kpi k5"><div class="n">${blocked.length}</div><div class="t">${GM.lbl('risk')}</div></div>
+    <div class="kpi k6"><div class="n">${avgAll===null?'—':avgAll}</div><div class="t">ממוצע${GM.partial?' צפי':''}</div></div>
   </div>
   <h3 class="sec" id="rStud">טבלת תלמידות מפורטת</h3>
   <div class="scroll" style="max-height:none;">
@@ -6223,18 +6266,18 @@ function buildReportHtml(cls){
     ${SUBJECTS.map(s=>{const r=x.r.per[s.id]; if(!r||!r.active)return '<td style="color:#cbd5e1;">—</td>';
       const nt=subjNote(x.st,s.id);
       return `<td ${nt?'class="hasNote"':''}>${scoreCellReport(r)}${nt?' '+tip(nt,'<span style="color:#f59e0b; font-size:12px;">📝</span>'):''}</td>`;}).join('')}
-    <td class="${gradeClass(x.r.avg)}" style="font-weight:800;">${fmt(x.r.avg)}${(!x.r.complete&&x.r.avg!==null)?'<sup style="opacity:.55;">*</sup>':''}</td>
-    <td><span class="badge ${x.r.cls}">${x.r.status}</span></td></tr>`).join('')}
+    <td class="${gradeClass(GM.score(x.r))}" style="font-weight:800;">${fmt(GM.score(x.r))}${(!x.r.complete&&GM.score(x.r)!==null)?'<sup style="opacity:.55;">*</sup>':''}</td>
+    <td><span class="badge ${GM.cls(x.r)}">${GM.status(x.r)}</span></td></tr>`).join('')}
   </tbody></table></div>
   ${(()=>{const np=results.reduce((a,x)=>a+SUBJECTS.filter(s=>{const r=x.r.per[s.id]; return r&&r.active&&r.final===null&&r.partial!==null;}).length,0);
     return np?`<div class="note" style="margin-top:6px;">📝 — יש הערה (מעבר עכבר מציג אותה; הרשימה המלאה בהמשך) &nbsp;·&nbsp; <span class="rep-part">00<sup>*</sup></span> — <b>ציון חלקי</b>: טרם הוזנו כל רכיבי המקצוע. ציונים אלה אינם נכללים בממוצע, בזכאות ובספירת המצטיינות (${np} מקצועות).</div>`
       :(results.some(x=>SUBJECTS.some(s=>subjNote(x.st,s.id)))?`<div class="note" style="margin-top:6px;">📝 — יש הערה על המקצוע (מעבר עכבר מציג אותה; הרשימה המלאה בהמשך).</div>`:'');})()}
   <div class="grid2" style="margin-top:16px;">
     <div>
-      <h3 class="sec" id="rExc">⭐ מצטיינות (${exc.length})</h3>
-      ${exc.length?exc.sort((a,b)=>b.r.avg-a.r.avg).map(x=>`<div class="alert-item" style="background:#faf5ff; border-right:4px solid #9333ea;">${esc(x.st.name)} · ${esc(x.st.cls)} · ממוצע ${x.r.avg}</div>`).join(''):'<div class="note">אין עדיין</div>'}
-      <h3 class="sec" id="rPot" style="margin-top:12px;">💜 פוטנציאל הצטיינות (${pot.length})</h3>
-      ${pot.length?pot.sort((a,b)=>b.r.avg-a.r.avg).map(x=>`<div class="alert-item" style="background:#fffbeb; border-right:4px solid #f59e0b;">${esc(x.st.name)} · ${esc(x.st.cls)} · ממוצע ${x.r.avg} · נדרש מעל ${state.thresholds.excel}</div>`).join(''):'<div class="note">אין</div>'}
+      <h3 class="sec" id="rExc">⭐ ${GM.lbl('exc')} (${exc.length})</h3>
+      ${exc.length?exc.sort((a,b)=>(GM.score(b.r)||0)-(GM.score(a.r)||0)).map(x=>`<div class="alert-item" style="background:#faf5ff; border-right:4px solid #9333ea;">${esc(x.st.name)} · ${esc(x.st.cls)} · ממוצע${GM.partial?' צפי':''} ${fmt(GM.score(x.r))}${GM.partial?` · כיסוי ${x.r.coverage||0}%`:''}</div>`).join(''):'<div class="note">אין עדיין</div>'}
+      <h3 class="sec" id="rPot" style="margin-top:12px;">💜 ${GM.lbl('pot')} (${pot.length})</h3>
+      ${pot.length?pot.sort((a,b)=>(GM.score(b.r)||0)-(GM.score(a.r)||0)).map(x=>`<div class="alert-item" style="background:#fffbeb; border-right:4px solid #f59e0b;">${esc(x.st.name)} · ${esc(x.st.cls)} · ממוצע${GM.partial?' צפי':''} ${fmt(GM.score(x.r))} · נדרש מעל ${state.thresholds.excel}</div>`).join(''):'<div class="note">אין</div>'}
     </div>
     <div>
       <h3 class="sec" id="rBad">🚨 דורשות התייחסות (${att.length})</h3>
@@ -6265,20 +6308,20 @@ function _reportText(cls){
   const studs=repStuds(cls);
   const results=studs.map(st=>({st,r:calcStudent(st)}));
   const n=studs.length; if(!n) return 'אין נתונים';
-  const elig=results.filter(x=>x.r.eligible).length;
-  const exc=results.filter(x=>x.r.excellent);
-  const pot=results.filter(x=>x.r.potential);
-  const blocked=results.filter(x=>x.r.blockers.length>0);
-  const avgAll=avgOf(results.map(x=>x.r.avg).filter(v=>v!==null));
+  const GM=gradeMode(results);
+  const elig=GM.elig, exc=GM.excList, pot=GM.potList, blocked=GM.riskList;
+  const avgAll=GM.avg;
   let t=`${reportTitle()} — ${cls||'כל השכבה'} (${new Date().toLocaleDateString('he-IL')})\n`;
   if(state.coord) t+=`רכזת פדגוגית: ${state.coord}\n`;
-  t+=`תלמידות: ${n} | זכאיות: ${elig} (${Math.round(elig/n*100)}%) | מצטיינות: ${exc.length} | פוטנציאל: ${pot.length} | עם מעכבים: ${blocked.length} | ממוצע: ${avgAll??'—'}\n\n`;
+  if(GM.partial) t+=`⚠️ ${GM.note()}\n`;
+  t+=`תלמידות: ${n} | ${GM.lbl('elig')}: ${elig} (${Math.round(elig/n*100)}%) | ${GM.lbl('exc')}: ${exc.length} | ${GM.lbl('pot')}: ${pot.length} | ${GM.lbl('risk')}: ${blocked.length} | ממוצע${GM.partial?' צפי':''}: ${avgAll??'—'}\n\n`;
   const partN=results.reduce((a,x)=>a+SUBJECTS.filter(s=>{const r=x.r.per[s.id]; return r&&r.active&&r.final===null&&r.partial!==null;}).length,0);
   if(partN) t+=`(${partN} מקצועות עם ציון חלקי — טרם הוזנו כל הרכיבים)\n`;
   t+='\n';
-  if(exc.length) t+='⭐ מצטיינות:\n'+exc.sort((a,b)=>b.r.avg-a.r.avg).map(x=>`  ${x.st.name} (${x.st.cls}) — ${x.r.avg}`).join('\n')+'\n\n';
-  if(pot.length) t+='💜 פוטנציאל הצטיינות:\n'+pot.sort((a,b)=>b.r.avg-a.r.avg).map(x=>`  ${x.st.name} (${x.st.cls}) — ${x.r.avg}`).join('\n')+'\n\n';
-  if(blocked.length) t+='🚨 עם מקצועות מעכבים:\n'+blocked.map(x=>`  ${x.st.name} (${x.st.cls}) — ${x.r.blockers.map(s=>s.name).join(', ')}`).join('\n')+'\n';
+  const srt=(a,b)=>(GM.score(b.r)||0)-(GM.score(a.r)||0);
+  if(exc.length) t+='⭐ '+GM.lbl('exc')+':\n'+exc.sort(srt).map(x=>`  ${x.st.name} (${x.st.cls}) — ${fmt(GM.score(x.r))}`).join('\n')+'\n\n';
+  if(pot.length) t+='💜 '+GM.lbl('pot')+':\n'+pot.sort(srt).map(x=>`  ${x.st.name} (${x.st.cls}) — ${fmt(GM.score(x.r))}`).join('\n')+'\n\n';
+  if(blocked.length) t+='🚨 '+GM.lbl('risk')+':\n'+blocked.map(x=>`  ${x.st.name} (${x.st.cls}) — ${(GM.partial?(x.r.projBlockers||[]):x.r.blockers).map(s=>s.name).join(', ')}`).join('\n')+'\n';
   return t;
 }
 function emailReport(){
@@ -7202,14 +7245,18 @@ function exportExcel(cls){
   if(!studs.length){toast('אין נתונים לייצוא');return;}
   const wb=XLSX.utils.book_new();
   // גיליון סיכום
+  const GX=gradeMode(studs.map(st=>({st,r:calcStudent(st)})));
   const sumRows=studs.map(st=>{
     const r=calcStudent(st);
     const row={_st:st,[gx('שם')]:st.name,[gx('כיתה')]:st.cls};
     SUBJECTS.forEach(s=>{const p=r.per[s.id]; row[s.name]=p&&p.active?(p.final??'חסר'):'';});
-    row['ממוצע משוקלל']=r.avg??'';
+    /* הקובץ שיוצא חייב להסכים עם המסך. קודם הוא כתב את הממוצע הסופי בלבד,
+       ולכן באמצע השנה יצא קובץ עם עמודת ממוצע ריקה ו"ממוצע חלקי" בכל שורה. */
+    row[GX.partial?'ממוצע צפי':'ממוצע משוקלל']=GX.score(r)??'';
+    if(GX.partial) row['כיסוי %']=r.coverage||0;
     row['סה"כ יח"ל']=r.totalUnits;
-    row['מעכבים']=r.blockers.map(s=>s.name).join(', ');
-    row['סטטוס']=r.status;
+    row['מעכבים']=(GX.partial?(r.projBlockers||[]):r.blockers).map(s=>s.name).join(', ');
+    row['סטטוס']=GX.status(r);
     return row;
   });
   if(state.coord) sumRows.forEach(r=>{ r['רכזת פדגוגית']=state.coord; });
@@ -7229,8 +7276,14 @@ function exportExcel(cls){
         else{ row[subj.name+' | '+c.n+' | מגן']=g[key+'.m']??''; row[subj.name+' | '+c.n+' | בחינה']=g[key+'.e']??''; }
         const gstat=st.gstat||{};
         const stTxt=k=>gstat[k]==='r'?'אדום — טרם דווח':gstat[k]==='b'?'כחול — פיקטיבי':'';
-        const sTxt=c.t==='i'?stTxt(key):[stTxt(key+'.m'),stTxt(key+'.e')].filter(Boolean).join(' / ');
-        if(sTxt) row[subj.name+' | '+c.n+' | סימון']=sTxt;
+        /* קודם שני הסימונים נדחסו לעמודה אחת מופרדת ב-" / ", ואי אפשר היה
+           לדעת אם סימון בודד שייך למגן או לבחינה. עכשיו עמודה לכל אחד. */
+        if(c.t==='i'){ const t0=stTxt(key); if(t0) row[subj.name+' | '+c.n+' | סימון']=t0; }
+        else{
+          const tm=stTxt(key+'.m'), te=stTxt(key+'.e');
+          if(tm) row[subj.name+' | '+c.n+' | סימון מגן']=tm;
+          if(te) row[subj.name+' | '+c.n+' | סימון בחינה']=te;
+        }
         if(codes[key]) row[subj.name+' | '+c.n+' | סמל שאלון']=codes[key];
         const nt=noteOf(st,key); if(nt) row[subj.name+' | '+c.n+' | הערה']=nt;
         if(ov.w!==undefined||ov.s!==undefined) row[subj.name+' | '+c.n+' | התאמה אישית']=(ov.w!==undefined?'משקל '+ov.w+'%':'')+(ov.s!==undefined?' מגן '+ov.s+'%':'');
@@ -7245,11 +7298,11 @@ function exportExcel(cls){
     const ss=state.students.filter(s=>s.cls===c);
     const rs=ss.map(s=>calcStudent(s));
     return {'כיתה':c,'תלמידות':ss.length,
-      'זכאיות':rs.filter(r=>r.eligible).length,
-      'מצטיינות':rs.filter(r=>r.excellent).length,
-      'פוטנציאל':rs.filter(r=>r.potential).length,
-      'עם מעכבים':rs.filter(r=>r.blockers.length>0).length,
-      'ממוצע':avgOf(rs.map(r=>r.avg).filter(v=>v!==null))??''};
+      [GX.lbl('elig')]:rs.filter(r=>GX.is(r,'elig')).length,
+      [GX.lbl('exc')]:rs.filter(r=>GX.is(r,'exc')).length,
+      [GX.lbl('pot')]:rs.filter(r=>GX.is(r,'pot')).length,
+      [GX.lbl('risk')]:rs.filter(r=>GX.is(r,'risk')).length,
+      [GX.partial?'ממוצע צפי':'ממוצע']:avgOf(rs.map(r=>GX.score(r)).filter(v=>v!==null&&v!==undefined))??''};
   });
   addSheet(wb,XLSX.utils.json_to_sheet(anRows),'ניתוח כיתתי');
   const fname=`דוח-בגרות-${cls||'שכבה'}-${new Date().toISOString().slice(0,10)}.xlsx`;
@@ -7628,7 +7681,9 @@ function importExcel(input){
         const cls=String(row['כיתה']||state.classes[0]||'כיתה א').trim();
         if(!state.classes.includes(cls)) state.classes.push(cls);
         let st=state.students.find(s=>s.name===name&&s.cls===cls);
-        if(!st){ st={id:uid(),name,cls,units:{},mugbarNames:{},grades:{}}; state.students.push(st); added++; }
+        if(!st){ st={id:uid(),name,cls,units:{},mugbarNames:{},grades:{},
+                     gstat:{},codes:{},notes:{},simg:{},ov:{},tests:{},shw:{},hid:{}};
+                 state.students.push(st); added++; }
         else updated++;
         SUBJECTS.forEach(subj=>{
           const uKey=subj.name+' - יח"ל';
@@ -7640,6 +7695,12 @@ function importExcel(input){
              גיבוי ישן היה מחזיר תלמידות בלי ציונים, בשקט. */
           const maxU=headUnits(subj,state.students);
           const effC=headCompsOf(subj,state.students), rawC=subj.comps(maxU);
+          /* עד כה הייבוא קרא ציונים בלבד, בזמן שהייצוא כותב גם הערות, סמלי
+             שאלון, סימוני צבע והתאמות אישיות. כלומר ייצוא ואז ייבוא איבד את
+             כל אלה בשקט. כאן הם חוזרים, והגיליון הגולמי הופך לגיבוי אמיתי. */
+          const gsOf=t=>/אדום/.test(t)?'r':/כחול/.test(t)?'b':'';
+          const sn=row[subj.name+' - הערה כללית'];
+          if(sn!==undefined&&sn!=='') (st.notes=st.notes||{})[subj.id]=String(sn);
           effC.forEach((c,i)=>{
             const key=subj.id+'.'+i;
             const names=[c.n,(rawC[i]||{}).n].filter((v,j,a)=>v&&a.indexOf(v)===j);
@@ -7648,6 +7709,33 @@ function importExcel(input){
             const set=(k,v)=>{ if(v!==undefined&&v!=='') st.grades[k]=+v; };
             if(c.t==='i') set(key,pick(''));
             else{ set(key+'.m',pick(' | מגן')); set(key+'.e',pick(' | בחינה')); }
+            const nt=pick(' | הערה');
+            if(nt!==undefined&&nt!=='') (st.notes=st.notes||{})[key]=String(nt);
+            const cd=pick(' | סמל שאלון');
+            if(cd!==undefined&&cd!=='') (st.codes=st.codes||{})[key]=String(cd);
+            st.gstat=st.gstat||{};
+            if(c.t==='i'){ const t0=pick(' | סימון'); if(t0){ const v=gsOf(String(t0)); if(v) st.gstat[key]=v; } }
+            else{
+              const tm=pick(' | סימון מגן'), te=pick(' | סימון בחינה');
+              if(tm){ const v=gsOf(String(tm)); if(v) st.gstat[key+'.m']=v; }
+              if(te){ const v=gsOf(String(te)); if(v) st.gstat[key+'.e']=v; }
+              // תאימות לקובץ ישן: עמודה אחת מופרדת ב-" / "
+              const t1=pick(' | סימון');
+              if(t1&&String(t1).indexOf(' / ')>-1){
+                const pr=String(t1).split(' / ');
+                const a=gsOf(pr[0]||''), b=gsOf(pr[1]||'');
+                if(a) st.gstat[key+'.m']=a; if(b) st.gstat[key+'.e']=b;
+              }
+            }
+            const ovTxt=pick(' | התאמה אישית');
+            if(ovTxt){
+              const mw=/משקל\s*([\d.]+)/.exec(String(ovTxt));
+              const ms=/מגן\s*([\d.]+)/.exec(String(ovTxt));
+              const po={};
+              if(mw) po.w=+mw[1];
+              if(ms) po.s=+ms[1];
+              if(Object.keys(po).length) (st.ov=st.ov||{})[key]=po;
+            }
           });
         });
       });
@@ -8014,7 +8102,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='17.4';
+const APP_VERSION='17.5';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
