@@ -446,8 +446,7 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
   .hHead .hT{font-size:13.5px; line-height:1.35;}
   /* קווי ההפרדה בסרגל מאבדים משמעות כשהקבוצות שלצידם ירדו לתחתית */
   .eBar .eSep{display:none;}
-  .eBar .eImp .eImpT{display:none;}
-  .eBar .eImp{padding:3px 9px;}
+  .eBar .eImp{padding:3px 10px;}
   .eBar{padding-inline:9px;}
 }
 /* הכפתורים שיורדים לתחתית מקבלים רשת של שתיים, כמו כפתורי הכותרת */
@@ -497,6 +496,12 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
 .al-miss{background:#f8fafc; border-right:4px solid #94a3b8;}
 .chartbox{position:relative; height:280px;}
 .chartbox.tall{height:420px;}
+.holdStrip{display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:8px 11px; margin-bottom:10px;
+  background:#f6fdf9; border:1px solid #a7f3d0; border-radius:11px;}
+.holdStrip .hsT{display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:800; color:#07714f;}
+.holdStrip .hsChip{font-size:12px; font-weight:700; color:#065f46; background:#fff; border:1px solid #a7f3d0;
+  border-radius:999px; padding:3px 10px; cursor:pointer;}
+.holdStrip .hsChip:hover{background:#ecfdf5; border-color:#34d399;}
 .focusCard{border:2px solid #9333ea; box-shadow:0 4px 18px rgba(147,51,234,.10);}
 .deadCell{background:repeating-linear-gradient(135deg,#fff7ed,#fff7ed 6px,#ffedd5 6px,#ffedd5 12px);}
 .deadCell input{border-color:#fb923c !important; color:#9a3412; text-decoration:line-through;}
@@ -886,11 +891,13 @@ button.btn:active,.hbtn:active{transform:translateY(1px) scale(.985);}
   *{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important;}
 }
 /* --- KPI: מחוון התקדמות דק ותת-כותרת. הגרדיאנטים k1..k6 לא נגעו. --- */
-.kpi .ks{font-size:10.5px; font-weight:700; opacity:.78; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-.kpi .kbar{height:3px; border-radius:3px; background:rgba(255,255,255,.26); margin-top:7px; overflow:hidden;}
-.kpi .kbar i{display:block; height:100%; border-radius:3px; background:rgba(255,255,255,.85);
+.kpi .ks{font-size:10.5px; font-weight:700; color:var(--muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+/* הכלל הזה בא אחרי ההגדרה החדשה ולכן גבר עליה, והחזיר פסים לבנים
+   על רקע בהיר. הצבעים נגזרים עכשיו ממשתני הכרטיס. */
+.kpi .kbar{height:3px; border-radius:3px; background:var(--kcLine); margin-top:7px; overflow:hidden;}
+.kpi .kbar i{display:block; height:100%; border-radius:3px; background:var(--kcDark);
   transition:width var(--t-slow) var(--ease);}
-.kpi:hover{transform:translateY(-3px); box-shadow:0 12px 28px rgba(30,41,80,.22), inset 0 1px 0 rgba(255,255,255,.3);}
+.kpi:hover{transform:translateY(-3px); box-shadow:0 10px 26px rgba(30,41,80,.13);}
 .kpi:hover .ico{transform:scale(1.06);}
 .kpi{transition:transform var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);}
 .kpi .ico{transition:transform var(--t-base) var(--ease);}
@@ -1266,7 +1273,8 @@ table.tbl.grades tbody tr:focus-within td:first-child{background:#eaf0ff;}
   button.btn.sm,.eBar .btn.sm,.repNav .btn.sm{min-height:36px; padding-inline:11px;}
   button.btn.xq{min-width:36px; min-height:36px;}
   button.rowCode{min-height:24px; line-height:22px; font-size:10.5px; padding-inline:8px;}
-  .gstatDot{width:16px !important; height:16px !important;}
+  /* דווקא במסך מגע צריך את אזור הלחיצה הגדול — הכלל הזה ביטל אותו. */
+  .gstatDot{width:30px !important; height:30px !important; border-width:7px !important;}
   .dzLink,.hQ,.preCard,.alCard,.setHead,.hHead{min-height:44px;}
   .symBtn{min-height:52px;}
   select,input[type=number],input[type=text]{min-height:36px;}
@@ -2783,7 +2791,9 @@ function tip(text,inner,cls){
 
 /* ============ אזורים מתקפלים ============ */
 let openBoxes={};
-function toggleRings(){ openBoxes.rings=(openBoxes.rings===false); renderKeepScroll(); }
+/* היה openBoxes.rings=(openBoxes.rings===false): בטעינה ראשונה הערך
+   undefined, ולכן הלחיצה הראשונה קבעה false — כלומר שוב סגור. */
+function toggleRings(){ openBoxes.rings=(openBoxes.rings!==true); renderKeepScroll(); }
 function toggleBox(k){ openBoxes[k]=!openBoxes[k]; renderKeepScroll(); }
 
 /* ============ הערות (לכל קובייה ולכל מקצוע) ============ */
@@ -3368,9 +3378,21 @@ function calcStudent(st,opts){
   const complete=missing.length===0;
   let eligible=complete&&blockers.length===0&&anyFinal;   // מעודכן בהמשך בתנאי היחידות
   // תנאי יח"ל להצטיינות: מתמטיקה 4-5 יח"ל + אנגלית 5 יח"ל
-  const uMath=per.math&&per.math.active?per.math.u:0;
-  const uEng=per.english&&per.english.active?per.english.u:0;
-  const unitsOk=!state.reqUnits||(uMath>=4&&uEng>=5);
+  /* ══ תנאי היח"ל להצטיינות ══
+     קודם נקראה רמת היח"ל הרשומה בלבד. מקצוע שכל משקליו אופסו אין בו
+     רכיבים, ולכן גם אין בו "ציון חסר" — complete נשאר true, ותלמידה
+     בלי ציון באנגלית או במתמטיקה סווגה "מצטיינת". רמת יח"ל רשומה אינה
+     הישג; צריך ציון. */
+  const rM=per.math, rE2=per.english;
+  const uMath=rM&&rM.active?rM.u:0;
+  const uEng=rE2&&rE2.active?rE2.u:0;
+  const mathScored=!!(rM&&rM.active&&rM.wSum>0&&rM.final!==null);
+  const engScored =!!(rE2&&rE2.active&&rE2.wSum>0&&rE2.final!==null);
+  // במסלול הצפי אין עדיין ציון סופי לאף אחת — די בכך שהמקצוע בר-חישוב
+  const mathOpen=!!(rM&&rM.active&&rM.wSum>0);
+  const engOpen =!!(rE2&&rE2.active&&rE2.wSum>0);
+  const unitsOk    =!state.reqUnits||(uMath>=4&&uEng>=5&&mathScored&&engScored);
+  const unitsOkProj=!state.reqUnits||(uMath>=4&&uEng>=5&&mathOpen&&engOpen);
   const T=state.thresholds;
   /* ══ תנאי הזכאות שאפשר לחשב ══
      קודם "זכאית" נקבעה מציון סופי אחד בלבד ומהיעדר נכשלים — ולכן תלמידה
@@ -3386,10 +3408,23 @@ function calcStudent(st,opts){
     if(!r||!r.active) return;
     if(sj.id==='english') return;
     if(sj.internalOnly&&!state.includeInternal) return;
+    /* מקצוע שכל משקליו אופסו אינו יכול לייצר ציון, ולכן אינו "מקצוע
+       מורחב" בשום מובן — הוא רק רשומה של 5 יח"ל בלי תוכן. */
+    if(!(r.wSum>0)) return;
     if(r.u>uMax) uMax=r.u; });
   const unitsEnough=totalUnits>=minU;
   const expandedOk=(state.reqExpanded===false)||uMax>=5;
+  /* מקצוע שהתלמידה רשומה אליו אבל כל משקליו אופסו אינו יכול לייצר ציון
+     לעולם. אין בו "רכיב חסר", ולכן complete נשאר true והתוכנה סימנה
+     "זכאית" בלי ציון באנגלית. זו תקלת הגדרה, והיא חייבת להיאמר. */
+  const broken=[];
+  SUBJECTS.forEach(sj=>{ const r=per[sj.id];
+    if(!r||!r.active) return;
+    if(sj.internalOnly&&!state.includeInternal) return;
+    if(!(r.wSum>0)) broken.push(sj.name); });
   const gaps2=[];
+  if(broken.length) gaps2.push('אין מבנה ציונים ב'+broken.slice(0,2).join(', ')+
+    (broken.length>2?' ועוד '+(broken.length-2):''));
   if(!unitsEnough) gaps2.push('חסרות '+Math.round((minU-totalUnits)*10)/10+' יח"ל מתוך '+minU);
   if(!expandedOk)  gaps2.push('אין מקצוע מורחב של 5 יח"ל');
   let status, cls;
@@ -3408,7 +3443,7 @@ function calcStudent(st,opts){
      בחודשים שבהם היא הכי נחוצה.
      כאן מחושב מסלול שני, על בסיס מה שכבר הוזן בלבד. הוא לעולם אינו מתיימר
      להיות ודאי — הוא נקרא "צפי", ומוצג בנפרד מהסיווג הסופי. */
-  eligible=eligible&&unitsEnough&&expandedOk;
+  eligible=eligible&&unitsEnough&&expandedOk&&!broken.length;
   let pw=0, pu=0, projBlockers=[], covW=0, covTot=0;
   SUBJECTS.forEach(subj=>{
     const r=per[subj.id];
@@ -3436,20 +3471,20 @@ function calcStudent(st,opts){
     if(projBlockers.length){ projStatus='בסיכון · '+projBlockers.length+' מעכבים'; projCls='b-bad'; }
     else if(!covEnough){ projStatus='מעט מדי ציונים ('+coverage+'%)'; projCls='b-miss'; }
     else if(gaps2.length){ projStatus=gaps2[0]; projCls='b-warn'; }
-    else if(projAvg>=T.excel&&unitsOk){ projStatus=covSure?'בדרך להצטיינות':'בדרך להצטיינות · מוקדם ('+coverage+'%)'; projCls='b-exc'; }
-    else if(projAvg>=T.potential&&unitsOk){ projStatus=covSure?'בדרך לפוטנציאל':'בדרך לפוטנציאל · מוקדם ('+coverage+'%)'; projCls='b-pot'; }
+    else if(projAvg>=T.excel&&unitsOkProj){ projStatus=covSure?'בדרך להצטיינות':'בדרך להצטיינות · מוקדם ('+coverage+'%)'; projCls='b-exc'; }
+    else if(projAvg>=T.potential&&unitsOkProj){ projStatus=covSure?'בדרך לפוטנציאל':'בדרך לפוטנציאל · מוקדם ('+coverage+'%)'; projCls='b-pot'; }
     else{ projStatus='בדרך לזכאות'; projCls='b-ok'; }
   }
   return {per,avg,totalUnits,blockers,missing,borderlines,gaps,flipList,eligible,complete,status,cls,predicted,predIn,unitsOk,
           excellent: eligible&&avg>=T.excel&&unitsOk,
           potential: eligible&&avg>=T.potential&&avg<T.excel&&unitsOk,
-          unitsEnough, expandedOk, unitGaps:gaps2, minUnits:minU, maxUnit:uMax,
+          unitsEnough, expandedOk, unitGaps:gaps2, minUnits:minU, maxUnit:uMax, brokenSubjects:broken,
           /* צפי — על בסיס מה שהוזן */
-          projAvg, coverage, projBlockers, projStatus, projCls,
+          projAvg, coverage, projBlockers, projStatus, projCls, unitsOkProj, mathScored, engScored,
           covEnough, covSure, projTentative:covEnough&&!covSure,
-          projEligible: projAvg!==null&&covEnough&&!projBlockers.length&&unitsEnough&&expandedOk,
-          projExcellent: projAvg!==null&&covEnough&&!projBlockers.length&&unitsEnough&&expandedOk&&projAvg>=T.excel&&unitsOk,
-          projPotential: projAvg!==null&&covEnough&&!projBlockers.length&&unitsEnough&&expandedOk&&projAvg>=T.potential&&projAvg<T.excel&&unitsOk};
+          projEligible: projAvg!==null&&covEnough&&!projBlockers.length&&unitsEnough&&expandedOk&&!broken.length,
+          projExcellent: projAvg!==null&&covEnough&&!projBlockers.length&&unitsEnough&&expandedOk&&!broken.length&&projAvg>=T.excel&&unitsOkProj,
+          projPotential: projAvg!==null&&covEnough&&!projBlockers.length&&unitsEnough&&expandedOk&&!broken.length&&projAvg>=T.potential&&projAvg<T.excel&&unitsOkProj};
 }
 /* ── "דורשות התייחסות": שורה אחת לכל תלמידה ──
    קודם הדוח נבנה מרשימת ההתראות השטוחה, ולכן תלמידה עם שלושה מעכבים ושני פערים
@@ -4785,8 +4820,7 @@ function renderEntry(m){
   m.innerHTML=`
   ${entryFull?'':hero('pen','הזנת ציונים',
     `${esc(subj.name)}${entryClass?' · '+esc(entryClass):' · כל השכבה'} · ${studs.length} תלמידות`,
-    [`<button class="btn sm" onclick="openGradeImport()">${ic('up',14)}ייבוא ציונים למקצוע</button>`,
-     `<button class="btn sec sm" onclick="setTab('sim')">${ic('lab',14)}סימולציה</button>`])}
+    [`<button class="btn sec sm" onclick="setTab('sim')">${ic('lab',14)}סימולציה</button>`])}
   <div class="eBar">
     <span class="eGrp">
       <span class="eLbl">${ic('book',13)}מקצוע</span>
@@ -4801,7 +4835,6 @@ function renderEntry(m){
     <!-- בטלפון הסרגל הזה הוא 679 פיקסל בחלון של 368. שני בוררי המקצוע והכיתה
          נשארים; שאר הכפתורים יורדים ל"פעולות וניהול" בתחתית המסך. -->
     <span class="eGrp" data-tail="1">
-      <button class="btn ok sm" onclick="openGradeImport()">${ic('up',13)}ייבוא</button>
       <button class="btn sec sm ${openBoxes.paint?'on':''}" onclick="toggleBox('paint')">${ic('palette',13)}צביעה גורפת</button>
       <button class="btn sec sm ${openBoxes.lg?'on':''}" onclick="toggleBox('lg')">${ic('info',13)}מקרא</button>
     </span>
@@ -6180,20 +6213,30 @@ function focusPanel(results){
     rows.push({st:x.st,r,sc});
   });
   if(!rows.length) return '';
-  rows.sort((a,b)=>b.sc-a.sc);
-  const shown=focusAll?rows:rows.slice(0,15);
-  const nOver=rows.filter(x=>x.sc>=T.excel).length;
-  const nClose=rows.filter(x=>x.sc<T.excel).length;
+  /* ══ סדר לפי מה שאפשר לעשות, לא לפי הציון ══
+     המיון לפי ממוצע יורד שם בראש את מי שכבר מעל הסף — ארבע שורות של
+     "מחזיקה, אין מה לעשות" לפני השורה הראשונה שדורשת פעולה. הרכזת
+     שואלת "על מי לעבוד השבוע", ולכן הקרובות ביותר לסף פותחות. */
+  const hold=rows.filter(x=>x.sc>=T.excel).sort((a,b)=>b.sc-a.sc);
+  const act =rows.filter(x=>x.sc< T.excel).sort((a,b)=>b.sc-a.sc);   // הקרובה לסף ראשונה
+  const shown=focusAll?act:act.slice(0,12);
+  const nOver=hold.length;
+  const nClose=act.length;
   const cov=Math.round(avgOf(results.map(x=>x.r.coverage||0))||0);
   return `<div class="card focusCard" style="margin-bottom:16px;">
     ${secHead('star','מי קרובה להצטיינות — ומה בדיוק צריך',
-      'כל תלמידה בטווח ההישג, עם המהלך היחיד שישפיע אצלה הכי הרבה',
+      nClose?('מי שמהלך אחד יכול להעביר אותה — '+nClose+' תלמידות, הקרובה לסף ראשונה'):'כל תלמידה בטווח ההישג',
       `${schip('star',nOver+' כבר ב-'+T.excel+' ומעלה')}${schip('sparkles',nClose+' בטווח')}`)}
     <div class="note" style="margin-bottom:9px;">
+      <b>מי שהכי קרובה לסף מופיעה ראשונה</b> — זו מי שמהלך אחד יכול להעביר אותה.
       המספרים הם <b>צפי לפי מה שכבר הוזן</b>${cov<95?' ('+cov+'% מהמשקל)':''}, ולכן הרשימה עובדת גם באמצע השנה.
       <b>"משפיע X%"</b> = כמה מהממוצע הכללי הרכיב הזה שווה — שם כדאי להשקיע.
-      לחיצה על שם פותחת את כרטיס התלמידה.
     </div>
+    ${hold.length?`<div class="holdStrip">
+      <span class="hsT">${ic('check',14)}כבר מעל ${T.excel} — רק לשמור על הרמה:</span>
+      ${hold.map(x=>`<button class="hsChip" onclick="openStudent('${x.st.id}')" title="${esc(x.st.cls||'')}">
+        ${esc(x.st.name)} <b>${fmt(x.sc)}</b></button>`).join('')}
+    </div>`:''}
     <div class="scroll" style="max-height:52vh;">
     <table class="tbl"><thead><tr>
       <th>תלמידה</th><th>ממוצע צפי</th><th>כיסוי</th><th>המצב</th><th>המהלך הכי משתלם</th>
@@ -6225,8 +6268,9 @@ function focusPanel(results){
         <td>${move}</td></tr>`;
     }).join('')}
     </tbody></table></div>
-    ${rows.length>15?`<button class="btn sec sm" style="margin-top:9px;" onclick="toggleFocusAll()">
-      ${focusAll?'▴ הצגת 15 הראשונות':'▾ הצגת כל '+rows.length+' התלמידות'}</button>`:''}
+    ${act.length>12?`<button class="btn sec sm" style="margin-top:9px;" onclick="toggleFocusAll()">
+      ${focusAll?'▴ הצגת 12 הקרובות ביותר':'▾ הצגת כל '+act.length+' התלמידות בטווח'}</button>`:''}
+    ${!act.length?`<div class="note" style="padding:10px 0;">אין כרגע תלמידה בטווח שמהלך אחד מעביר אותה.</div>`:''}
   </div>`;
 }
 /* ============ חיזוי מצטיינות סוף שנה ============ */
@@ -7742,7 +7786,13 @@ function moeMatch(recs,studs){
 function moePickKey(st,rec,taken){
   const g=st.grades||{}, codes=st.codes||{};
   taken=taken||{};
-  const free=c=>!(c.key in taken)||taken[c.key]===rec.code;   // לא נתפסה בייבוא הזה ע"י שאלון אחר
+  /* פנויה = לא נתפסה בייבוא הזה על ידי שאלון אחר, וגם אינה נושאת כבר
+     סמל של שאלון אחר מייבוא קודם. */
+  const free=c=>{
+    if((c.key in taken)&&taken[c.key]!==rec.code) return false;
+    const cur=String(codes[c.key]||'').replace(/[^0-9]/g,'');
+    return !cur||cur===rec.code;
+  };
   const has=k=>g[k+'.m']!==undefined||g[k+'.e']!==undefined;
   // 1. רובריקה שכבר מסומנת בסמל הזה — הוודאות הגבוהה ביותר
   for(const c of rec.cand){
@@ -7762,7 +7812,11 @@ function moePickKey(st,rec,taken){
     if(free(c)&&!has(c.key)&&!codes[c.key]) return {...c,why:'empty'};
   }
   const open=rec.cand.filter(free);
-  return {...(open[0]||rec.cand[0]),why:'fallback'};
+  /* אין אף רובריקה פנויה: שלושה שאלונים מתחרים על שתי רובריקות. קודם
+     השלישי נפל על רובריקה תפוסה ודרס בשקט את הציונים שכבר נכנסו אליה.
+     עכשיו זה מסומן כהתנגשות — ולא מוחל בלי הכרעה מפורשת. */
+  if(!open.length) return {...rec.cand[0],why:'clash'};
+  return {...open[0],why:'fallback'};
 }
 /* השוואה: מה חדש, מה זהה, מה סותר */
 /* ══ שני מועדים לאותו שאלון ══
@@ -7797,13 +7851,38 @@ function moeDiff(matched){
     if(!groups[sig]){ groups[sig]=[]; order.push(sig); }
     groups[sig].push(rec);
   });
-  const chosen=[], taken={};
-  order.forEach(sig=>{
-    const pick=moePickMoed(groups[sig]);
-    const rec=pick.rec;
-    const c=moePickKey(rec.st,rec,taken[rec.st.id]||{});
+  /* ההקצאה הייתה לפי סדר השורות בקובץ: שני שאלוני אנגלית, E ו-G, קיבלו
+     רובריקות הפוכות כשסדר השורות התהפך — ולרובריקות האלה חלוקות מגן/בחינה
+     שונות, ולכן הציון הסופי יצא 80 או 77 לפי הסדר באקסל. הקצאה חייבת
+     להיגזר מהנתונים בלבד: סמל שאלון נמוך יותר מקבל את הרובריקה המוקדמת. */
+  order.sort((a,b)=>{
+    const ca=String(a.split('|')[1]||''), cb=String(b.split('|')[1]||'');
+    const na=+ca.replace(/[^0-9]/g,''), nb=+cb.replace(/[^0-9]/g,'');
+    if(Number.isFinite(na)&&Number.isFinite(nb)&&na!==nb) return na-nb;
+    return ca.localeCompare(cb);
+  });
+  /* ══ שני מעברים ══
+     מעבר אחד בלבד נתן קדימות לסמל הנמוך: שאלון C עובד ראשון, תופס
+     רובריקה שכבר נושאת את הסמל של E, ודורס את הציונים שבה. שיוך שכבר
+     קיים אצל התלמידה חזק מכל ניחוש, ולכן הוא נקבע קודם. */
+  const chosen=[], taken={}, picked={};
+  const take=(sig,rec,c,alts)=>{
     (taken[rec.st.id]=taken[rec.st.id]||{})[c.key]=rec.code;
-    chosen.push({...rec, _alts:pick.alts, _key:c});
+    picked[sig]=1;
+    chosen.push({...rec, _alts:alts, _key:c});
+  };
+  // מעבר 1 — רק רובריקות שכבר מסומנות בסמל הזה
+  order.forEach(sig=>{
+    const pick=moePickMoed(groups[sig]), rec=pick.rec;
+    const codes=rec.st.codes||{};
+    const hit=(rec.cand||[]).find(c=>String(codes[c.key]||'').replace(/[^0-9]/g,'')===rec.code);
+    if(hit) take(sig,rec,{...hit,why:'code'},pick.alts);
+  });
+  // מעבר 2 — כל השאר, ממה שנותר פנוי
+  order.forEach(sig=>{
+    if(picked[sig]) return;
+    const pick=moePickMoed(groups[sig]), rec=pick.rec;
+    take(sig,rec,moePickKey(rec.st,rec,taken[rec.st.id]||{}),pick.alts);
   });
   matched=chosen;
   matched.forEach(rec=>{
@@ -7848,6 +7927,8 @@ function moeApply(diff,picks){
   let nG=0,nC=0,nF=0,nT=0;
   diff.forEach((x,i)=>{
     if(x.state==='same') return;
+    // התנגשות שאלונים — ברירת המחדל היא לא להחיל, עד שתוכרע
+    if(x.why==='clash'&&picks[i]!=='file') return;
     if(x.state==='conflict'&&(picks[i]||'file')!=='file') return;   // המשתמשת בחרה להשאיר את שלה
     const st=(state.students||[]).find(s=>s.id===x.st.id); if(!st) return;
     /* הקובץ של המשרד מכיל תעודת זהות, והיא נזרקה. התוצאה: ת"ז לעולם לא
@@ -8456,7 +8537,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='18.2';
+const APP_VERSION='18.6';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -9184,7 +9265,8 @@ function moeRenderReview(){
   const byName=[...new Set(d.filter(x=>x.how==='name').map(x=>x.st.id))].length;
   const tzConf=(moeJob.unmatched||[]).filter(u=>u.how==='tzConflict');
   const multi=d.filter(x=>x.part==='final'&&x.alts&&x.alts.length);
-  const lbl=p=>p==='m'?'מגן':p==='e'?'בחינה':'סמל שאלון';
+  const clash=d.map((x,i)=>({x,i})).filter(o=>o.x.why==='clash');
+  const lbl=p=>p==='m'?'מגן':p==='e'?'בחינה':p==='final'?'ציון סופי רשמי':'סמל שאלון';
   const subjOf=k=>{ const sj=SUBJ_MAP[String(k).split('.')[0]]; return sj?sj.name:k; };
   const compOf=(st,k)=>{ const p=String(k).split('.'); const sj=SUBJ_MAP[p[0]]; if(!sj) return k;
     const u=getUnits(st,sj)||sj.opts[sj.opts.length-1];
@@ -9203,6 +9285,7 @@ function moeRenderReview(){
       ${byName?`<br><span style="color:#9a3412;">👤 ${byName} תלמידות זוהו <b>לפי שם בלבד</b> — אין להן ת"ז באחד הצדדים. כדאי לוודא שאלה הנכונות.</span>`:''}
       ${tzConf.length?`<br><span class="g-red">🛑 ${tzConf.length} שורות <b>לא שויכו</b> כי תעודת הזהות סותרת. הן מופיעות למטה.</span>`:''}
       ${multi.length?`<br><span style="color:#1e40af;">🗓️ ${multi.length} שאלונים הופיעו <b>ביותר ממועד אחד</b>. נבחר המועד שהציון הרשמי בו הגבוה ביותר, והציונים והציון הרשמי מגיעים מאותה שורה. המועד האחר נשמר ומוצג בכרטיס התלמידה.</span>`:''}
+      ${clash.length?`<br><span class="g-red">⚡ ${clash.length} שורות של <b>שאלונים שמתחרים על אותה רובריקה</b> — אין מספיק רובריקות פנויות. הן <b>לא יוחלו</b> אלא אם תבחרי במפורש — אחרת האחרון היה דורס את הקודם בשקט.</span>`:''}
       <br>כל ציון שייכנס יסומן <b>שחור — דווח למשרד</b>.
     </div>
   </div>
@@ -9222,6 +9305,17 @@ function moeRenderReview(){
     <button class="btn sec sm" onclick="moePickAll('file')">הכול מהקובץ</button>
     <button class="btn sec sm" onclick="moePickAll('mine')">הכול שלי</button>
   </div>`:'<div class="note" style="margin-bottom:10px;">אין סתירות — הכול ייכנס ישירות.</div>'}
+  ${clash.length?`<div class="card" style="margin:8px 0; border:2px solid var(--bad); padding:10px 12px;">
+    <b class="g-red">⚡ שאלונים שמתחרים על אותה רובריקה</b>
+    <div class="note" style="margin:4px 0 8px;">בחרי לכל שורה אם להחיל אותה. מה שלא ייבחר פשוט לא ייכנס.</div>
+    <table class="tbl"><thead><tr><th>תלמידה</th><th>שאלון</th><th>רובריקה</th><th>מה</th><th>בקובץ</th><th>בחירה</th></tr></thead><tbody>
+    ${clash.map(({x,i})=>`<tr style="background:#fff1f2;">
+      <td>${esc(x.st.name)}</td><td>${esc((x.rec&&x.rec.qname)||(x.rec&&x.rec.code)||'')}</td>
+      <td>${esc(subjOf(x.key))} · ${esc(compOf(x.st,x.key))}</td>
+      <td>${lbl(x.part)}</td><td style="font-weight:800;">${esc(String(x.val??'—'))}</td>
+      <td><button class="btn ${moeJob.picks[i]==='file'?'ok':'sec'} sm" onclick="moePick(${i},'file')">החלה</button>
+          <button class="btn ${moeJob.picks[i]!=='file'?'ok':'sec'} sm" onclick="moePick(${i},'skip')">דילוג</button></td></tr>`).join('')}
+    </tbody></table></div>`:''}
   ${moeJob.unmatched.length?`<details style="margin-top:8px;" ${tzConf.length?'open':''}>
     <summary class="note" style="cursor:pointer;">${moeJob.unmatched.length} שורות ללא תלמידה מתאימה — הסיבה לכל אחת</summary>
     <div class="scroll" style="max-height:150px; margin-top:6px;"><table class="tbl"><thead><tr>
