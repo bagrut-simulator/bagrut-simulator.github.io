@@ -48,8 +48,7 @@
 nav.tabs button .ic{margin-inline-end:6px;}
 .kpi{display:flex; align-items:center; gap:13px;}
 .kpi .ico{width:46px; height:46px; border-radius:14px; display:flex; align-items:center; justify-content:center;
-  background:rgba(255,255,255,.22); border:1px solid rgba(255,255,255,.3); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 3px 10px rgba(0,0,0,.12); flex-shrink:0;
+  background:var(--kcSoft); color:var(--kcDark); border:1px solid var(--kcLine); flex-shrink:0;
   transition:transform .34s cubic-bezier(.34,1.56,.64,1);}
 .kpi .ico svg{width:24px; height:24px; stroke-width:2.1;}
 .kpi:hover .ico{transform:scale(1.1) rotate(-5deg);}
@@ -188,26 +187,35 @@ main{padding:20px; max-width:1500px; margin:0 auto;}
 .card{transition:transform .34s cubic-bezier(.34,1.56,.64,1), box-shadow .3s ease;}
 .card:hover{box-shadow:var(--sh2);}
 .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px;}
-.kpi{border-radius:22px; padding:14px 16px; color:#fff; position:relative; overflow:hidden;
-  box-shadow:0 6px 20px rgba(30,41,80,.16), inset 0 1px 0 rgba(255,255,255,.22);
+/* ══ כרטיסי המדדים ══
+   היו גרדיאנט רווי עם טקסט לבן. בדיקת ניגודיות: לבן על הקצה הבהיר של
+   "פוטנציאל" נתן 1.67:1 — הרבה מתחת לסף. גם "זכאיות" (1.92) ו"ממוצע"
+   (2.56) נפלו. עכשיו רקע בהיר, מספר כהה ונגיעת צבע: הזהות נשמרת
+   בכותרת, בלוגו ובאייקונים, והמספרים קריאים. */
+.kpi{border-radius:22px; padding:14px 16px; color:var(--ink); position:relative; overflow:hidden;
+  background:#fff; border:1px solid var(--line); border-inline-start:5px solid var(--kcDark);
+  box-shadow:0 2px 12px rgba(30,41,80,.07);
   animation:kpiIn .5s cubic-bezier(.22,1.2,.36,1) both;
   transition:transform .34s cubic-bezier(.34,1.56,.64,1), box-shadow .3s ease;
   cursor:default; will-change:transform;}
-.kpi:hover{transform:translateY(-6px) scale(1.03); box-shadow:0 16px 34px rgba(30,41,80,.26), inset 0 1px 0 rgba(255,255,255,.3);}
+.kpi:hover{transform:translateY(-4px); box-shadow:0 10px 26px rgba(30,41,80,.13);}
 .kpi:active{transform:translateY(-2px) scale(.99); transition-duration:.12s;}
 .kpis .kpi:nth-child(1){animation-delay:.02s}.kpis .kpi:nth-child(2){animation-delay:.07s}
 .kpis .kpi:nth-child(3){animation-delay:.12s}.kpis .kpi:nth-child(4){animation-delay:.17s}
 .kpis .kpi:nth-child(5){animation-delay:.22s}.kpis .kpi:nth-child(6){animation-delay:.27s}
 @keyframes kpiIn{from{opacity:0; transform:translateY(18px) scale(.94);}to{opacity:1; transform:none;}}
-.kpi::after{content:''; position:absolute; inset:0; background:radial-gradient(140px 70px at 90% -10px,rgba(255,255,255,.3),transparent 70%); pointer-events:none;}
-.kpi .n{font-size:28px; font-weight:800; letter-spacing:-.5px; text-shadow:0 2px 8px rgba(0,0,0,.15);}
-.kpi .t{font-size:12.5px; opacity:.92;}
-.kpi.k1{background:linear-gradient(140deg,#4f46e5,#7c8cf8);}
-.kpi.k2{background:linear-gradient(140deg,#059669,#34d399);}
-.kpi.k3{background:linear-gradient(140deg,#d97706,#fbbf24);}
-.kpi.k4{background:linear-gradient(140deg,#7c3aed,#c084fc);}
-.kpi.k5{background:linear-gradient(140deg,#8f1d3c,#c2405f);}
-.kpi.k6{background:linear-gradient(140deg,#475569,#94a3b8);}
+.kpi::after{content:''; position:absolute; inset:0; background:linear-gradient(140deg,var(--kcSoft),transparent 60%); opacity:.6; pointer-events:none;}
+.kpi>*{position:relative; z-index:1;}
+.kpi .n{font-size:28px; font-weight:800; letter-spacing:-.5px; color:var(--kcDark);}
+.kpi .t{font-size:12.5px; color:var(--muted); font-weight:600;}
+.kpi .ks{color:var(--muted);}
+.kpi.k1{--kcDark:#3730a3; --kcSoft:#eef2ff; --kcLine:#c7d2fe;}
+.kpi.k2{--kcDark:#065f46; --kcSoft:#ecfdf5; --kcLine:#a7f3d0;}
+.kpi.k3{--kcDark:#92400e; --kcSoft:#fffbeb; --kcLine:#fde68a;}
+.kpi.k4{--kcDark:#5b21b6; --kcSoft:#faf5ff; --kcLine:#e9d5ff;}
+.kpi.k5{--kcDark:#8f1d3c; --kcSoft:#fff1f2; --kcLine:#fecdd3;}
+.kpi.k6{--kcDark:#334155; --kcSoft:#f8fafc; --kcLine:#e2e8f0;}
+.kpi .kbar{background:var(--kcLine);} .kpi .kbar i{background:var(--kcDark);}
 h2.sec{font-size:16px; font-weight:800; margin:6px 0 12px;}
 h3.sec{font-size:14px; font-weight:700; margin:4px 0 10px; color:var(--brand);}
 table.tbl{width:100%; border-collapse:collapse; font-size:13px;}
@@ -438,6 +446,8 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
   .hHead .hT{font-size:13.5px; line-height:1.35;}
   /* קווי ההפרדה בסרגל מאבדים משמעות כשהקבוצות שלצידם ירדו לתחתית */
   .eBar .eSep{display:none;}
+  .eBar .eImp .eImpT{display:none;}
+  .eBar .eImp{padding:3px 9px;}
   .eBar{padding-inline:9px;}
 }
 /* הכפתורים שיורדים לתחתית מקבלים רשת של שתיים, כמו כפתורי הכותרת */
@@ -515,9 +525,14 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
 #ndModal{position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:230; display:none; align-items:flex-start; justify-content:center; padding:40px 15px; overflow:auto;}
 #ndModal.show{display:flex;}
 #ndModal .box{background:#fff; border-radius:22px; max-width:520px; width:100%; padding:20px; box-shadow:0 24px 60px rgba(15,23,42,.4); animation:sheetUp .22s cubic-bezier(.2,.9,.3,1.1) both;}
-.gstatDot{display:none; width:16px; height:16px; border-radius:50%; border:1.5px solid #cbd5e1; background:#111; cursor:pointer; padding:0; flex-shrink:0; vertical-align:middle;}
-.gstatDot.r{background:#dc2626; border-color:#fca5a5;}
-.gstatDot.b{background:#1d4ed8; border-color:#93c5fd;}
+/* הנקודה נראית 16px אבל אזור הלחיצה 28px — border שקוף עם background-clip.
+   16 פיקסלים הם מטרה קטנה מדי לאצבע, ולחיצה שמחטיאה משנה סימון של ציון. */
+.gstatDot{display:none; width:28px; height:28px; border-radius:50%; cursor:pointer; padding:0;
+  flex-shrink:0; vertical-align:middle; border:6px solid transparent; background:#111;
+  background-clip:content-box; box-shadow:inset 0 0 0 1.5px #cbd5e1;}
+.gstatDot:hover{box-shadow:inset 0 0 0 1.5px var(--brand), 0 0 0 3px rgba(79,70,229,.12);}
+.gstatDot.r{background:#dc2626; box-shadow:inset 0 0 0 1.5px #fca5a5;}
+.gstatDot.b{background:#1d4ed8; box-shadow:inset 0 0 0 1.5px #93c5fd;}
 .noteBtn{background:transparent; border:1px solid var(--line); border-radius:8px; padding:2px 6px; cursor:pointer; color:#94a3b8; position:relative; line-height:1;}
 .noteBtn:hover{background:var(--soft); color:var(--brand); border-color:var(--brand);}
 .noteBtn.has{background:#fffbeb; border-color:#f59e0b; color:#b45309;}
@@ -1006,6 +1021,7 @@ button.btn.xq:focus-visible{outline:2px solid var(--bad); outline-offset:1px;}
 .eBar .eLbl svg{stroke:currentColor;}
 .eBar select{font-size:12.5px; font-weight:700; height:30px; padding:3px 9px; border-radius:var(--r-sm); max-width:170px;}
 .eBar .eSep{width:1px; align-self:stretch; background:var(--line); margin:0 2px;}
+.eBar .eImp{height:30px; padding:3px 11px; white-space:nowrap;}
 .eBar .btn.sm{font-size:12px;}
 .eBar .btn.sec.on{background:#eef2ff; border-color:var(--brand); color:#3730a3;}
 body.entry-scrolled .eBar{padding:5px 10px; box-shadow:var(--el2);}
@@ -1587,16 +1603,26 @@ _probe();
    הנתון לעצמו. התוצאה: אחסון מלא, הציון לא נכתב לדיסק, והמסך הציג "✓ נשמר".
    עכשיו setItem מחזיר אם הכתיבה הקבועה הצליחה, ו-persisted() קורא אך ורק
    מהאחסון הקבוע — בלי רשת הביטחון של הזיכרון. */
+/* STORAGE_OK היה דגל אחד לכל המפתחות. כתיבת הציונים נכשלה, מיד אחריה
+   כתיבת חותמת הזמן הצליחה והדליקה אותו בחזרה — ומאותו רגע getItem קרא
+   מהאחסון הקבוע, שבו העותק הישן. מעבר לסימולטור אחר וחזרה החזיר את
+   הציון הקודם. לכן המעקב הוא עכשיו לכל מפתח בנפרד. */
+var _dirty={};
+function storageDegraded(){ return Object.keys(_dirty).length>0; }
 var LS={
   lastErr:'',
-  getItem:function(k){ try{ return STORAGE_OK?localStorage.getItem(k):(k in _mem?_mem[k]:null); }catch(e){ return (k in _mem?_mem[k]:null); } },
+  getItem:function(k){
+    if(_dirty[k]) return (k in _mem?_mem[k]:null);    // העותק הקבוע מיושן — הזיכרון קובע
+    try{ return STORAGE_OK?localStorage.getItem(k):(k in _mem?_mem[k]:null); }
+    catch(e){ return (k in _mem?_mem[k]:null); }
+  },
   persisted:function(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   setItem:function(k,v){
     _mem[k]=String(v);                       // הזיכרון נשאר, כדי שהעבודה בהווה לא תאבד
-    try{ localStorage.setItem(k,v); STORAGE_OK=true; LS.lastErr=''; return true; }
-    catch(e){ STORAGE_OK=false; LS.lastErr=(e&&(e.name||e.message))||'שגיאת אחסון'; return false; }
+    try{ localStorage.setItem(k,v); delete _dirty[k]; LS.lastErr=''; if(!storageDegraded()) STORAGE_OK=true; return true; }
+    catch(e){ _dirty[k]=1; STORAGE_OK=false; LS.lastErr=(e&&(e.name||e.message))||'שגיאת אחסון'; return false; }
   },
-  removeItem:function(k){ delete _mem[k]; try{ if(STORAGE_OK) localStorage.removeItem(k); }catch(e){} },
+  removeItem:function(k){ delete _mem[k]; delete _dirty[k]; try{ localStorage.removeItem(k); }catch(e){} },
   key:function(i){ try{ return STORAGE_OK?localStorage.key(i):Object.keys(_mem)[i]; }catch(e){ return Object.keys(_mem)[i]; } },
   get length(){ try{ return STORAGE_OK?localStorage.length:Object.keys(_mem).length; }catch(e){ return Object.keys(_mem).length; } }
 };
@@ -2387,7 +2413,7 @@ function renderSaveInd(){
   }
   const n=state.students.length;
   const t=lastSaveAt?lastSaveAt.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}):'—';
-  if(saveOk===false){ el.style.background='#fee2e2'; el.style.color='#991b1b'; el.innerHTML='⚠️ השמירה נכשלה — לחצי כאן'; return; }
+  if(saveOk===false||storageDegraded()){ el.style.background='#fee2e2'; el.style.color='#991b1b'; el.innerHTML='⚠️ השמירה נכשלה — לחצי כאן'; return; }
   // בטלפון: רק השעה. מספר התלמידות מופיע בכל מקרה בכותרת של כל מסך.
   if(tabsCompact()){ el.style.background=''; el.style.color=''; el.innerHTML=`✓ ${t}`; return; }
   el.innerHTML=`✓ נשמר ${t} · ${n} תלמידות`;
@@ -3291,13 +3317,15 @@ function calcSubject(st,subj,opts){
       if((needM&&m===null)||(needE&&e===null)){ missing++; }
       else{
         // ציון הרכיב (מגן+בחינה) מעוגל לשלם לפי הכלל — 85.5 ← 86
-        val=Math.round((needM?m*s/100:0)+(needE?e*(100-s)/100:0));
+        // 65.6×0.30 + 92.6×0.70 שווה בדיוק 84.5, אך בנקודה צפה 84.49999999999999.
+        // אותו באג שתוקן בציון הסופי, שלב אחד למטה.
+        val=rnd((needM?m*s/100:0)+(needE?e*(100-s)/100:0));
         if(flipped) flips.push({comp:c.n,m,e,s});
         if(needM&&needE&&m-e>=state.thresholds.gap) gaps.push({comp:c.n,m,e});
       }
     }
     if(val!==null) sum+=val*c.w/100;
-    details.push({comp:c,val:val===null?null:Math.round(val*10)/10});
+    details.push({comp:c,val:val===null?null:rnd1(val)});
   });
   const wSum=comps.reduce((a,c)=>a+(+c.w||0),0);
   // ציון חלקי — לפי הרכיבים שכבר הוזנו בלבד (לתצוגה בלבד, לא נכנס לזכאות ולממוצע)
@@ -3330,7 +3358,13 @@ function calcStudent(st,opts){
     if(r.predictedUsed){ predicted=true; predIn.push(subj.name); }
   });
   const avg=usum>0?rnd1(wsum/usum):null;
-  const totalUnits=SUBJECTS.reduce((a,s)=>{const r=per[s.id]; if(!r.active)return a; if(s.internalOnly&&!state.includeInternal)return a; return a+r.u;},0);
+  /* מקצוע פעיל שכל משקלי הרכיבים שלו אופסו אינו יכול לייצר ציון כלל,
+     ולכן אסור שייספר ביחידות ויעזור לעבור את סף ה-21. */
+  const totalUnits=SUBJECTS.reduce((a,s)=>{const r=per[s.id];
+    if(!r||!r.active)return a;
+    if(s.internalOnly&&!state.includeInternal)return a;
+    if(!(r.wSum>0))return a;
+    return a+r.u;},0);
   const complete=missing.length===0;
   let eligible=complete&&blockers.length===0&&anyFinal;   // מעודכן בהמשך בתנאי היחידות
   // תנאי יח"ל להצטיינות: מתמטיקה 4-5 יח"ל + אנגלית 5 יח"ל
@@ -3344,9 +3378,13 @@ function calcStudent(st,opts){
      נגזרים מהנתונים שכבר יש, ולכן הם נבדקים. מה שאינו נמצא במערכת —
      חובות לימוד ומעורבות חברתית — אינו נבדק, וזה נאמר במפורש במסך. */
   const minU=(T.minUnits===undefined||T.minUnits===null)?21:+T.minUnits;
+  /* "מקצוע מורחב" הוא מקצוע מוגבר ברמת 5 יח"ל — ואנגלית אינה נחשבת,
+     היא מקצוע חובה. תלמידה שהמקצוע היחיד שלה ב-5 יח"ל הוא אנגלית
+     סווגה בטעות כמצטיינת. */
   let uMax=0;
   SUBJECTS.forEach(sj=>{ const r=per[sj.id];
     if(!r||!r.active) return;
+    if(sj.id==='english') return;
     if(sj.internalOnly&&!state.includeInternal) return;
     if(r.u>uMax) uMax=r.u; });
   const unitsEnough=totalUnits>=minU;
@@ -4148,16 +4186,19 @@ function renderDash(m){
     ${kpiCard('k6','chart',partialMode?pAvg:avgAll,'ממוצע שכבתי',partialMode?pAvg:avgAll,
       partialMode?'כולל ציונים חלקיים':'',true)}
   </div>`:''}
-  ${n?eligNoteHtml():''}
+  ${/* "דורשות טיפול" יושב בתובנות, והוא היה אחרי הטבעות והאגדה —
+       כלומר המידע שאפשר לפעול לפיו מיד היה הכי רחוק מהעין. */''}
+  ${n?insightsHtml(results):''}
   ${n?deadPanel():''}
   ${n?focusPanel(results):''}
-  ${n?`<div class="card" style="margin-bottom:16px; padding:${openBoxes.rings===false?'10px 17px':'17px'};">
-    <div class="secHead" style="margin-bottom:${openBoxes.rings===false?'0':'10px'}; cursor:pointer;" onclick="toggleRings()">
+  ${n?eligNoteHtml():''}
+  ${n?`<div class="card" style="margin-bottom:16px; padding:${openBoxes.rings!==true?'10px 17px':'17px'};">
+    <div class="secHead" style="margin-bottom:${openBoxes.rings!==true?'0':'10px'}; cursor:pointer;" onclick="toggleRings()">
       <span class="shIco">${ic('target',16)}</span>
       <span><span class="shT">אחוזים במבט אחד</span><span class="shS">אותם מספרים שבכרטיסים, ביחס לכל השכבה${GM.partial?' · לפי הצפי':''}</span></span>
-      <span class="shR"><span style="font-size:15px; color:var(--muted);">${openBoxes.rings===false?'▾':'▴'}</span></span>
+      <span class="shR"><span style="font-size:15px; color:var(--muted);">${openBoxes.rings!==true?'▾':'▴'}</span></span>
     </div>
-    ${openBoxes.rings===false?'':`<div class="ring-wrap">
+    ${openBoxes.rings!==true?'':`<div class="ring-wrap">
     ${ring(elig/n*100,GM.lbl('elig'),'#10b981',elig+' מתוך '+n)}
     ${ring(exc/n*100,GM.lbl('exc'),'#9333ea',exc+' תלמידות')}
     ${ring(pot/n*100,GM.lbl('pot'),'#f59e0b',pot+' תלמידות')}
@@ -4167,7 +4208,6 @@ function renderDash(m){
   ${(()=>{ let r=0,b=0; studs.forEach(s=>Object.values(s.gstat||{}).forEach(v=>{v==='r'?r++:v==='b'?b++:0;}));
     return (r||b)?`<div class="card legendCard" style="margin-bottom:14px;">${statusLegend()}
       <div style="margin-top:6px; font-size:13px;">${r?`<span class="badge b-warn">🔴 ${r} ציונים אמיתיים שטרם דווחו למשרד</span> `:''}${b?`<span class="badge" style="background:#dbeafe; color:#1e40af;">🔵 ${b} ציונים פיקטיביים בשימוש</span>`:''}</div></div>`:''; })()}
-  ${n?insightsHtml(results):''}
   ${n?`<div class="grid2">
     <div class="card">${secHead('chart','התפלגות סטטוס','כמה תלמידות בכל מצב')}<div class="chartbox"><canvas id="chStatus"></canvas></div></div>
     <div class="card">${secHead('users2','ממוצע וזכאות לפי כיתה','השוואה בין הכיתות בשכבה')}<div class="chartbox"><canvas id="chClass"></canvas></div></div>
@@ -4193,6 +4233,17 @@ function topTable(results){
 }
 const PALETTE=['#9333ea','#f59e0b','#10b981','#b0335a','#94a3b8','#64748b'];
 function drawDashCharts(results,cls){
+  /* ספריית הגרפים נטענת מרשת חיצונית. בבית ספר עם רשת חסומה, או בפתיחה
+     אופליין, היא פשוט לא קיימת — וכל הדשבורד היה קורס למסך שגיאה.
+     הגרפים הם תוספת; המספרים והרשימות הם העיקר, והם חייבים לשרוד. */
+  if(typeof Chart==='undefined'){
+    ['chStatus','chClass','chSubj','chHist'].forEach(id=>{
+      const c=document.getElementById(id); const box=c&&c.parentElement;
+      if(box) box.innerHTML='<div class="note" style="display:flex; align-items:center; justify-content:center; height:100%; text-align:center;">'+
+        'הגרפים לא נטענו — ייתכן שהרשת חוסמת משאבים חיצוניים.<br>כל המספרים והרשימות בדף עובדים כרגיל.</div>';
+    });
+    return;
+  }
   /* הגרפים היו היחידים שנשארו על הסיווג הסופי: באמצע השנה עוגת הסטטוס
      הייתה אפורה לגמרי ("ממוצע חלקי" = 100%), וגרף הכיתות יצא ריק. */
   const GC=gradeMode(results);
@@ -4741,6 +4792,10 @@ function renderEntry(m){
       <span class="eLbl">${ic('book',13)}מקצוע</span>
       <select onchange="entrySubj=this.value;renderKeepScroll()">${SUBJECTS.map(s=>`<option value="${s.id}" ${s.id===entrySubj?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
       <select onchange="entryClass=this.value;renderKeepScroll()"><option value="">כל השכבה</option>${state.classes.map(c=>`<option ${entryClass===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
+      ${/* בנייד הכותרת מתקצרת ו"ייבוא ציונים" ירד לתפריט המתקפל יחד עם
+           פעולות משניות. זו הפעולה המרכזית של המסך הזה, ולכן היא נשארת
+           צמודה לבוררים — בדיוק שם שבו היא נדרשת. */''}
+      <button class="btn ok sm eImp" onclick="openGradeImport()" title="ייבוא ציונים למקצוע ${esc(subj.name)}">${ic('up',13)}<span class="eImpT">ייבוא ציונים</span></button>
     </span>
     <span class="eSep"></span>
     <!-- בטלפון הסרגל הזה הוא 679 פיקסל בחלון של 368. שני בוררי המקצוע והכיתה
@@ -6092,10 +6147,10 @@ function focusLever(st,r,target){
   const a95=projWith(st,pick.keys,95);
   if(a100===null||a60===null) return null;
   // הקשר בין ציון הרכיב לממוצע הוא לינארי — שתי נקודות מספיקות כדי להפוך אותו
-  const b=(a95-a60)/35;
-  let need=null, reach=a95;
+  const b=(a100-a60)/40;
+  let need=null, reach=a100;
   if(b>0.0001){
-    const v=Math.ceil(((target-(a95-95*b))/b)*10)/10;
+    const v=Math.ceil(((target-(a100-100*b))/b)*10)/10;
     if(v<=100){
       need=Math.max(0,Math.ceil(v)); reach=projWith(st,pick.keys,need);
       // אימות אחרי העיגול — ואם העיגול הפיל אותנו מתחת ליעד, נקודה אחת מעלה
@@ -6103,6 +6158,9 @@ function focusLever(st,r,target){
       if(reach===null||reach<target) need=null;
     }
   }
+  /* האינטרפולציה הלינארית עלולה להחזיר ערך מעט מעל 100 ולפסול את ההמלצה,
+     גם כשציון 100 כן מגיע ליעד. לכן בודקים את 100 במפורש לפני שמוותרים. */
+  if(need===null&&a100!==null&&a100>=target){ need=100; reach=a100; }
   return {pick, need, reach, a95, a100, share:Math.round(pick.share*1000)/10};
 }
 let focusAll=false;
@@ -6114,6 +6172,9 @@ function focusPanel(results){
     const r=x.r;
     const sc=(r.projAvg!==null&&r.projAvg!==undefined)?r.projAvg:r.avg;
     if(sc===null||sc===undefined) return;
+    /* ב-2% כיסוי הסיווג הראשי אמר "מעט מדי ציונים" — והכרטיס הזה עדיין
+       הכריז "מחזיקה — לשמור על הרמה". אותה רצפה חייבת לחול בשני המקומות. */
+    if(r.coverage!==undefined&&r.covEnough===false) return;
     if(r.projBlockers&&r.projBlockers.length) return;   // מופיעה ב"דורשות התייחסות"
     if(sc<T.potential-3) return;                        // רחוקה מדי כדי להיות מהלך ריאלי
     rows.push({st:x.st,r,sc});
@@ -6121,13 +6182,13 @@ function focusPanel(results){
   if(!rows.length) return '';
   rows.sort((a,b)=>b.sc-a.sc);
   const shown=focusAll?rows:rows.slice(0,15);
-  const nOver=rows.filter(x=>x.sc>T.excel).length;
-  const nClose=rows.filter(x=>x.sc<=T.excel).length;
+  const nOver=rows.filter(x=>x.sc>=T.excel).length;
+  const nClose=rows.filter(x=>x.sc<T.excel).length;
   const cov=Math.round(avgOf(results.map(x=>x.r.coverage||0))||0);
   return `<div class="card focusCard" style="margin-bottom:16px;">
     ${secHead('star','מי קרובה להצטיינות — ומה בדיוק צריך',
       'כל תלמידה בטווח ההישג, עם המהלך היחיד שישפיע אצלה הכי הרבה',
-      `${schip('star',nOver+' כבר מעל '+T.excel)}${schip('sparkles',nClose+' בטווח')}`)}
+      `${schip('star',nOver+' כבר ב-'+T.excel+' ומעלה')}${schip('sparkles',nClose+' בטווח')}`)}
     <div class="note" style="margin-bottom:9px;">
       המספרים הם <b>צפי לפי מה שכבר הוזן</b>${cov<95?' ('+cov+'% מהמשקל)':''}, ולכן הרשימה עובדת גם באמצע השנה.
       <b>"משפיע X%"</b> = כמה מהממוצע הכללי הרכיב הזה שווה — שם כדאי להשקיע.
@@ -6138,9 +6199,9 @@ function focusPanel(results){
       <th>תלמידה</th><th>ממוצע צפי</th><th>כיסוי</th><th>המצב</th><th>המהלך הכי משתלם</th>
     </tr></thead><tbody>
     ${shown.map(x=>{
-      const over=x.sc>T.excel;
+      const over=x.sc>=T.excel;
       const gap=Math.round((T.excel-x.sc)*10)/10;
-      const lv=over?null:focusLever(x.st,x.r,T.excel+0.1);
+      const lv=over?null:focusLever(x.st,x.r,T.excel);
       let move='';
       if(over){
         move=`<span class="badge b-exc">מחזיקה — לשמור על הרמה</span>`;
@@ -6159,8 +6220,7 @@ function focusPanel(results){
           <br><small style="color:var(--muted)">${esc(x.st.cls)}</small></td>
         <td class="${gradeClass(x.sc)}" style="font-weight:800; font-size:17px;">${fmt(x.sc)}</td>
         <td><span class="pill ${x.r.projTentative?'tentative':''}" ${x.r.projTentative?'title="פחות מ-'+COV_SURE+'% מהמשקל הוזן — הסיווג עלול להשתנות משמעותית"':''}>${x.r.coverage||0}%${x.r.projTentative?' ⏳':''}</span></td>
-        <td>${over?`<span class="delta-up">+${Math.round((x.sc-T.excel)*10)/10} מעל הסף</span>`
-             :gap<=0?`<span class="grade-warn" style="font-weight:800;">על הסף בדיוק — נדרש מעל ${T.excel}</span>`
+        <td>${over?`<span class="delta-up">${x.sc>T.excel?'+'+Math.round((x.sc-T.excel)*10)/10+' מעל הסף':'בדיוק על הסף ✓'}</span>`
                   :`<span class="${gap<=2?'grade-warn':''}" style="font-weight:800;">חסרים ${gap}</span>`}</td>
         <td>${move}</td></tr>`;
     }).join('')}
@@ -6395,7 +6455,7 @@ function buildReportHtml(cls){
       <h3 class="sec" id="rExc">⭐ ${GM.lbl('exc')} (${exc.length})</h3>
       ${exc.length?exc.sort((a,b)=>(GM.score(b.r)||0)-(GM.score(a.r)||0)).map(x=>`<div class="alert-item" style="background:#faf5ff; border-right:4px solid #9333ea;">${esc(x.st.name)} · ${esc(x.st.cls)} · ממוצע${GM.partial?' צפי':''} ${fmt(GM.score(x.r))}${GM.partial?` · כיסוי ${x.r.coverage||0}%`:''}</div>`).join(''):'<div class="note">אין עדיין</div>'}
       <h3 class="sec" id="rPot" style="margin-top:12px;">💜 ${GM.lbl('pot')} (${pot.length})</h3>
-      ${pot.length?pot.sort((a,b)=>(GM.score(b.r)||0)-(GM.score(a.r)||0)).map(x=>`<div class="alert-item" style="background:#fffbeb; border-right:4px solid #f59e0b;">${esc(x.st.name)} · ${esc(x.st.cls)} · ממוצע${GM.partial?' צפי':''} ${fmt(GM.score(x.r))} · נדרש מעל ${state.thresholds.excel}</div>`).join(''):'<div class="note">אין</div>'}
+      ${pot.length?pot.sort((a,b)=>(GM.score(b.r)||0)-(GM.score(a.r)||0)).map(x=>`<div class="alert-item" style="background:#fffbeb; border-right:4px solid #f59e0b;">${esc(x.st.name)} · ${esc(x.st.cls)} · ממוצע${GM.partial?' צפי':''} ${fmt(GM.score(x.r))} · נדרש ${state.thresholds.excel} ומעלה</div>`).join(''):'<div class="note">אין</div>'}
     </div>
     <div>
       <h3 class="sec" id="rBad">🚨 דורשות התייחסות (${att.length})</h3>
@@ -7399,9 +7459,17 @@ function exportExcel(cls){
   // גיליון גולמי (לייבוא חוזר)
   const rawRows=studs.map(st=>{
     const row={'שם':st.name,'כיתה':st.cls};
+    // בלי זה גיבוי לאקסל ושחזור ממנו מאבדים את כל תעודות הזהות
+    if(st.tz) row['תעודת זהות']=String(st.tz);
     SUBJECTS.forEach(subj=>{
       const sn=noteOf(st,subj.id); if(sn) row[subj.name+' - הערה כללית']=sn;
-      if(subj.opts.length>1) row[subj.name+' - יח"ל']=getUnits(st,subj);
+      /* הייצוא כתב יח"ל רק למקצוע עם כמה רמות לבחירה. לשון שבוטלה במפורש
+         (0 יח"ל) לא קיבלה עמודה, ובשחזור היא חזרה ל-2 — כלומר ביטול מפורש
+         של מקצוע אבד בגיבוי. */
+      const uNow=getUnits(st,subj);
+      const uExplicit=(st.units||{})[subj.id];
+      if(subj.opts.length>1||uExplicit===0||uNow===0)
+        row[subj.name+' - יח"ל']=uNow;
       if(subj.named) row[subj.name+' - שם מקצוע']=(st.mugbarNames||{})[subj.id]||'';
       headCompsOf(subj,studs).forEach((c,i)=>{
         const key=subj.id+'.'+i, g=st.grades||{}, codes=st.codes||{}, ov=(st.ov||{})[key]||{};
@@ -7643,7 +7711,7 @@ function moeMatch(recs,studs){
     if(st.tz) byTz[moeTz(st.tz)]=st;
     const n=moeNormName(st.name); if(n) (byName[n]=byName[n]||[]).push(st);
   });
-  const matched=[], unmatched=[];
+  const matched=[], unmatched=[], claimed={};
   recs.forEach(r=>{
     let st=r.tz?byTz[r.tz]:null, how=st?'tz':'', why='';
     if(!st&&r.name){
@@ -7651,12 +7719,17 @@ function moeMatch(recs,studs){
       if(!l||!l.length) why='אין תלמידה בשם הזה';
       else if(l.length>1) why='יש '+l.length+' תלמידות באותו שם';
       else{
-        const cand=l[0], candTz=cand.tz?moeTz(cand.tz):'';
+        const cand=l[0], candTz=cand.tz?moeTz(cand.tz):claimed[cand.id]||'';
         if(r.tz&&candTz&&candTz!==r.tz){
-          // שתי ת"ז קיימות וסותרות — לא משייכים לבד
-          why='ת"ז סותרת: בקובץ '+r.tz+' ובסימולטור '+candTz;
+          /* גם כשלתלמידה המקומית אין ת"ז: ברגע ששורה אחת עם ת"ז שויכה
+             אליה, שורה שנייה באותו שם עם ת"ז אחרת היא תלמידה אחרת. */
+          why=cand.tz?('ת"ז סותרת: בקובץ '+r.tz+' ובסימולטור '+candTz)
+                     :('שתי ת"ז שונות לאותו שם באותו קובץ: '+candTz+' ו-'+r.tz);
           st=null; how='tzConflict';
-        }else{ st=cand; how='name'; }
+        }else{
+          st=cand; how='name';
+          if(r.tz&&!cand.tz) claimed[cand.id]=r.tz;   // נתפסה על ידי הת"ז הזאת
+        }
       }
     }
     if(st) matched.push({...r,st,how});
@@ -7666,23 +7739,30 @@ function moeMatch(recs,studs){
 }
 /* בחירת הרכיב שאליו הציון שייך, כשסמל אחד מתאים לכמה רובריקות.
    מחזיר גם למה נבחר — כי במקרה אחד הבחירה אינה ודאית והמשתמשת חייבת לדעת. */
-function moePickKey(st,rec){
+function moePickKey(st,rec,taken){
   const g=st.grades||{}, codes=st.codes||{};
+  taken=taken||{};
+  const free=c=>!(c.key in taken)||taken[c.key]===rec.code;   // לא נתפסה בייבוא הזה ע"י שאלון אחר
   const has=k=>g[k+'.m']!==undefined||g[k+'.e']!==undefined;
   // 1. רובריקה שכבר מסומנת בסמל הזה — הוודאות הגבוהה ביותר
   for(const c of rec.cand){
     if(String(codes[c.key]||'').replace(/[^0-9]/g,'')===rec.code) return {...c,why:'code'};
   }
+  /* הסדר המקורי נשמר במכוון: רובריקה עם ציונים ובלי סמל נבחרת *לפני*
+     רובריקה ריקה, כדי שההשוואה תציג סתירה במקום לשפוך ציון בשקט לרובריקה
+     אחרת. התוספת היחידה היא free() — רובריקה שכבר נתפסה בייבוא הזה על ידי
+     שאלון אחר אינה מועמדת, ולכן שני שאלונים שונים מקבלים שתי רובריקות. */
   // 2. רובריקה עם ציונים אך בלי סמל — לא ידוע אם אלה אותם ציונים.
   //    בוחרים אותה בכוונה, כדי שההשוואה תציג סתירה במקום לשפוך לרובריקה אחרת בשקט.
   for(const c of rec.cand){
-    if(has(c.key)&&!codes[c.key]) return {...c,why:'ambiguous'};
+    if(free(c)&&has(c.key)&&!codes[c.key]) return {...c,why:'ambiguous'};
   }
-  // 3. רובריקה ריקה לגמרי
+  // 3. רובריקה ריקה לגמרי — גם כאן רק מה שלא נתפס בייבוא הזה
   for(const c of rec.cand){
-    if(!has(c.key)&&!codes[c.key]) return {...c,why:'empty'};
+    if(free(c)&&!has(c.key)&&!codes[c.key]) return {...c,why:'empty'};
   }
-  return {...rec.cand[0],why:'fallback'};
+  const open=rec.cand.filter(free);
+  return {...(open[0]||rec.cand[0]),why:'fallback'};
 }
 /* השוואה: מה חדש, מה זהה, מה סותר */
 /* ══ שני מועדים לאותו שאלון ══
@@ -7707,20 +7787,27 @@ function moePickMoed(recs){
 function moeDiff(matched){
   const out=[];
   /* קיבוץ לפי תלמידה ורובריקה, ובחירת מועד אחד */
-  const groups={};
+  /* הקיבוץ היה לפי (תלמידה × רובריקה) בלבד. שני שאלוני אנגלית שונים,
+     E ו-G, נופלים על אותה רובריקה מנוחשת — ולכן אחד מהם נבלע והוצג
+     כ"מועד חלופי" של השני. הקיבוץ הוא לפי סמל השאלון; רק אותו שאלון
+     בשני מועדים מתמזג. ושתי רובריקות שונות מוקצות לשני שאלונים שונים. */
+  const groups={}, order=[];
   matched.forEach(rec=>{
-    const c=moePickKey(rec.st,rec);
-    const sig=rec.st.id+'|'+c.key;
-    (groups[sig]=groups[sig]||[]).push(rec);
+    const sig=rec.st.id+'|'+rec.code;
+    if(!groups[sig]){ groups[sig]=[]; order.push(sig); }
+    groups[sig].push(rec);
   });
-  const chosen=[];
-  Object.keys(groups).forEach(sig=>{
+  const chosen=[], taken={};
+  order.forEach(sig=>{
     const pick=moePickMoed(groups[sig]);
-    chosen.push({...pick.rec, _alts:pick.alts});
+    const rec=pick.rec;
+    const c=moePickKey(rec.st,rec,taken[rec.st.id]||{});
+    (taken[rec.st.id]=taken[rec.st.id]||{})[c.key]=rec.code;
+    chosen.push({...rec, _alts:pick.alts, _key:c});
   });
   matched=chosen;
   matched.forEach(rec=>{
-    const st=rec.st, c=moePickKey(st,rec), key=c.key;
+    const st=rec.st, c=rec._key||moePickKey(st,rec), key=c.key;
     const g=st.grades||{};
     const add=(part,field,val)=>{
       if(val===null) return;
@@ -7758,11 +7845,16 @@ function moeDiff(matched){
    בבדיקה מול 38 שורות אמיתיות הוא היה גבוה ב-1 עד 3 נקודות מהנוסחה,
    ולכן אין דרך לשחזר אותו — אבל כן צריך לראות אותו. */
 function moeApply(diff,picks){
-  let nG=0,nC=0,nF=0;
+  let nG=0,nC=0,nF=0,nT=0;
   diff.forEach((x,i)=>{
     if(x.state==='same') return;
     if(x.state==='conflict'&&(picks[i]||'file')!=='file') return;   // המשתמשת בחרה להשאיר את שלה
     const st=(state.students||[]).find(s=>s.id===x.st.id); if(!st) return;
+    /* הקובץ של המשרד מכיל תעודת זהות, והיא נזרקה. התוצאה: ת"ז לעולם לא
+       נכנסה לבד, כל ייבוא נשען על התאמה לפי שם, והרכזת נדרשה להקליד
+       9 ספרות לכל תלמידה ביד. כאן היא נאספת פעם אחת, והייבוא הבא כבר
+       מדויק. ת"ז קיימת לעולם לא נדרסת. */
+    if(x.rec&&x.rec.tz&&!st.tz){ st.tz=x.rec.tz; nT++; }
     if(x.part==='code'){ st.codes=st.codes||{}; st.codes[x.key]=x.val; nC++; return; }
     if(x.part==='final'){
       st.moe=st.moe||{};
@@ -7775,7 +7867,7 @@ function moeApply(diff,picks){
     if(st.gstat) delete st.gstat[x.k];        // הגיע מהמשרד ⇒ מדווח ⇒ שחור
     nG++;
   });
-  return {nG,nC,nF};
+  return {nG,nC,nF,nT};
 }
 /* ייבוא חכם של קובץ הסימולטור המקורי (אקסל) — מזהה את המבנה וממלא את כל הציונים */
 function parseSimulatorWorkbook(wb){
@@ -7904,19 +7996,30 @@ function importExcel(input){
       }
       if(!rows.length){toast('הגיליון ריק');return;}
       if(!(('שם') in (rows[0]||{}))){ toast('לא נמצאה עמודת "שם" בגיליון'); return; }
-      let added=0, updated=0;
+      let added=0, updated=0; const tzSkip=[];
       rows.forEach(row=>{
         const name=String(row['שם']||'').trim(); if(!name) return;
         const cls=String(row['כיתה']||state.classes[0]||'כיתה א').trim();
+        const rowTz=String(row['תעודת זהות']||row['ת"ז']||row['תז']||'').replace(/[^0-9]/g,'').slice(0,9);
         if(!state.classes.includes(cls)) state.classes.push(cls);
-        let st=state.students.find(s=>s.name===name&&s.cls===cls);
+        /* הייבוא הרגיל התאים לפי שם וכיתה בלבד, והתעלם לחלוטין מת"ז —
+           ולכן ציון נדרס אצל תלמידה אחרת שבמקרה נושאת אותו שם. */
+        let st=rowTz?state.students.find(s=>s.tz&&String(s.tz)===rowTz):null;
+        if(!st){
+          const byNm=state.students.filter(s=>s.name===name&&s.cls===cls);
+          const free=byNm.filter(s=>!(rowTz&&s.tz&&String(s.tz)!==rowTz));
+          if(byNm.length&&!free.length){ tzSkip.push(name+' ('+cls+') — ת"ז סותרת'); return; }
+          st=free[0]||null;
+        }
         if(!st){ st={id:uid(),name,cls,units:{},mugbarNames:{},grades:{},
                      gstat:{},codes:{},notes:{},simg:{},ov:{},tests:{},shw:{},hid:{}};
                  state.students.push(st); added++; }
         else updated++;
+        if(rowTz&&!st.tz) st.tz=rowTz;
         SUBJECTS.forEach(subj=>{
           const uKey=subj.name+' - יח"ל';
-          if(row[uKey]!==undefined&&row[uKey]!=='') st.units[subj.id]=+row[uKey];
+          // 0 הוא ערך תקף — "לא לומדת את המקצוע" — ואסור שייחשב כתא ריק
+          if(row[uKey]!==undefined&&row[uKey]!==''&&row[uKey]!==null) st.units[subj.id]=+row[uKey];
           const nKey=subj.name+' - שם מקצוע';
           if(row[nKey]) st.mugbarNames[subj.id]=String(row[nKey]);
           /* קובץ שיוצא לפני שינוי שם רכיב נושא את השם הישן. לכן מחפשים
@@ -7968,7 +8071,29 @@ function importExcel(input){
           });
         });
       });
-      save(); render(); toast(`ייבוא הושלם: ${added} חדשות, ${updated} עודכנו`);
+      /* ══ כישלון שקט ══
+         קובץ של בית ספר עם עמודות משלו עובר את בדיקת "שם", נכנסות 39
+         תלמידות — ואף ציון לא נקלט, כי שמות העמודות אינם במבנה שהתוכנה
+         מכירה. בלי האזהרה הזאת זה נראה כמו ייבוא מוצלח, וזו בדיוק
+         התקלה שהורסת הדגמה. */
+      const nG2=state.students.reduce((a,x)=>a+Object.keys(x.grades||{}).length,0);
+      save(); render();
+      if((added||updated)&&nG2===0){
+        const cols=Object.keys(rows[0]||{}).filter(k=>k!=='שם'&&k!=='כיתה').slice(0,8);
+        alert('⚠️ נקלטו '+(added+updated)+' תלמידות — אבל אף ציון לא נכנס.\n\n'+
+          'התוכנה מזהה עמודות ציונים במבנה: «מקצוע | רכיב»\n'+
+          'למשל: «לשון | הערכה פנימית» או «תנ\"ך | בגרות חיצונית | מגן».\n\n'+
+          (cols.length?('בקובץ שלך העמודות הן:\n'+cols.join(' · ')+'\n\n'):'')+
+          'שלוש דרכים להמשיך:\n'+
+          '1. ייבוא דוח הציונים של משרד החינוך — נקלט ישירות.\n'+
+          '2. הזנת הציונים במסך הזנת הציונים.\n'+
+          '3. ייבוא מקצוע-מקצוע: הזנת ציונים ← ייבוא ציונים למקצוע.\n\n'+
+          'השמות והכיתות כבר נכנסו, אז אפשר להתחיל מכאן.');
+        return;
+      }
+      if(tzSkip.length) alert('⚠️ '+tzSkip.length+' שורות דולגו כי תעודת הזהות סותרת את זו שבסימולטור:\n\n'+
+        tzSkip.slice(0,15).join('\n')+'\n\nציון אצל תלמידה שגויה הוא הדבר היחיד שאי אפשר לתקן אחר כך.');
+      toast(`ייבוא הושלם: ${added} חדשות, ${updated} עודכנו`+(tzSkip.length?` · ${tzSkip.length} דולגו`:''));
     }catch(err){ toast('שגיאה בקריאת הקובץ: '+err.message); }
     input.value='';
   };
@@ -8331,7 +8456,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='17.8';
+const APP_VERSION='18.2';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -9121,7 +9246,9 @@ function moeConfirm(){
   pushUndo('ייבוא ציוני בגרות');
   const r=moeApply(moeJob.diff,moeJob.picks);
   save(); moeClose(); render();
-  toast(`נכנסו ${r.nG} ציונים · ${r.nC} סמלי שאלון`);
+  toast(`נכנסו ${r.nG} ציונים · ${r.nC} סמלי שאלון`+
+    (r.nF?` · ${r.nF} ציונים סופיים רשמיים`:'')+
+    (r.nT?` · ${r.nT} תעודות זהות נקלטו מהקובץ`:''));
 }
 
 /* ---- דוח אבחון: הופך "לא עובד" לנתונים ---- */
