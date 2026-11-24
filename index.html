@@ -492,6 +492,7 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
 .deadCell input{border-color:#fb923c !important; color:#9a3412; text-decoration:line-through;}
 .deadTag{font-size:10px; font-weight:800; color:#9a3412; background:#ffedd5; border:1px solid #fdba74;
   border-radius:6px; padding:1px 5px; margin-top:3px; white-space:nowrap; text-align:center;}
+.pill.tentative{background:#fff7ed; border-color:#fdba74; color:#9a3412; font-weight:700;}
 .thW{font-weight:700; color:var(--brand); opacity:.85;}
 .thW.off{color:var(--muted); font-weight:400;}
 .subj-card{border:1px solid var(--line); border-radius:13px; margin-bottom:11px; overflow:hidden; box-shadow:0 2px 10px rgba(30,41,80,.05);}
@@ -1580,9 +1581,21 @@ function _probe(){
   }
 }
 _probe();
+/* ══ אחסון: חייב לדעת לומר "לא נשמר" ══
+   קודם setItem כתב תמיד לזיכרון, בלע את הכישלון של localStorage, וכיבה את
+   STORAGE_OK. מאותו רגע getItem קרא מהזיכרון — והאימות ב-save() השווה את
+   הנתון לעצמו. התוצאה: אחסון מלא, הציון לא נכתב לדיסק, והמסך הציג "✓ נשמר".
+   עכשיו setItem מחזיר אם הכתיבה הקבועה הצליחה, ו-persisted() קורא אך ורק
+   מהאחסון הקבוע — בלי רשת הביטחון של הזיכרון. */
 var LS={
+  lastErr:'',
   getItem:function(k){ try{ return STORAGE_OK?localStorage.getItem(k):(k in _mem?_mem[k]:null); }catch(e){ return (k in _mem?_mem[k]:null); } },
-  setItem:function(k,v){ _mem[k]=String(v); try{ if(STORAGE_OK) localStorage.setItem(k,v); }catch(e){ STORAGE_OK=false; } },
+  persisted:function(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  setItem:function(k,v){
+    _mem[k]=String(v);                       // הזיכרון נשאר, כדי שהעבודה בהווה לא תאבד
+    try{ localStorage.setItem(k,v); STORAGE_OK=true; LS.lastErr=''; return true; }
+    catch(e){ STORAGE_OK=false; LS.lastErr=(e&&(e.name||e.message))||'שגיאת אחסון'; return false; }
+  },
   removeItem:function(k){ delete _mem[k]; try{ if(STORAGE_OK) localStorage.removeItem(k); }catch(e){} },
   key:function(i){ try{ return STORAGE_OK?localStorage.key(i):Object.keys(_mem)[i]; }catch(e){ return Object.keys(_mem)[i]; } },
   get length(){ try{ return STORAGE_OK?localStorage.length:Object.keys(_mem).length; }catch(e){ return Object.keys(_mem).length; } }
@@ -1867,7 +1880,7 @@ function applyLegacyStructure(st){
 }
 
 /* ============ מצב ושמירה ============ */
-const DEFAULT_STATE={classes:[], students:[], custom:{}, extraSubjects:[], coord:'', predLevel:'auto', countBlue:true, pro:false, wizDone:false, includeInternal:false, reqUnits:true, flipFav:true, updAuto:true, gStud:'f', gUser:'f', gCoord:'f', logo:null, thresholds:{pass:54.5, excel:90, potential:85, gap:20}};
+const DEFAULT_STATE={classes:[], students:[], custom:{}, extraSubjects:[], coord:'', predLevel:'auto', countBlue:true, pro:false, wizDone:false, includeInternal:false, reqUnits:true, flipFav:true, updAuto:true, gStud:'f', gUser:'f', gCoord:'f', logo:null, reqExpanded:true, thresholds:{pass:54.5, excel:90, potential:85, gap:20, minUnits:21}};
 /* ============ שכבת הניסוי של הסימולציה (חיה רק בלשונית הסימולציה, לא נוגעת במקור) ============ */
 function gradesOf(st,sim){
   if(sim&&st.simg&&Object.keys(st.simg).length) return Object.assign({},st.grades||{},st.simg);
@@ -2254,7 +2267,25 @@ function loadState(){
   try{const raw=LS.getItem(profileKey()); if(raw) return withDefaults(JSON.parse(raw));}catch(e){}
   return JSON.parse(JSON.stringify(DEFAULT_STATE));
 }
-let lastSaveAt=null, saveOk=null;
+let lastSaveAt=null, saveOk=null, saveWarned=false;
+/* הודעה אחת חזקה ברגע הראשון, ואחריה שורת מצב קבועה. התראה בכל הקלדה
+   הופכת לרעש שמתעלמים ממנו — וזה בדיוק המצב שבו אסור שיתעלמו. */
+function warnSaveFailed(){
+  try{ renderSaveInd(); }catch(e){}
+  if(saveWarned) return;
+  saveWarned=true;
+  try{
+    alert('⚠️ השמירה למכשיר נכשלה!\n\n'+
+      (LS.lastErr?('הדפדפן החזיר: '+LS.lastErr+'\n\n'):'')+
+      'הנתונים קיימים בזיכרון ועובדים כרגע, אבל הם לא נכתבו למכשיר —\n'+
+      'וייעלמו ברענון או בסגירת הדפדפן.\n\n'+
+      'מה לעשות עכשיו:\n'+
+      '1. לחצי "💾 גיבוי לקובץ" ושמרי את הקובץ.\n'+
+      '2. בדקי אם הדפדפן במצב גלישה בסתר, או שאחסון הדפדפן מלא.\n\n'+
+      'אל תסגרי את החלון לפני שהגיבוי ירד.');
+  }catch(e){}
+}
+function saveFailed(){ return saveOk===false; }
 function save(noQueue){
   rebuildSubjects();      // מקצוע שנוסף או נמחק חייב להיות במערך לפני כל חישוב
   clearCompCache();
@@ -2262,10 +2293,12 @@ function save(noQueue){
   try{ NESTED_DEFAULTS.forEach(k=>{ state[k]=Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE[k])), (typeof state[k]==='object'&&state[k])||{}); }); }catch(e){}
   try{
     const json=JSON.stringify(state);
-    LS.setItem(profileKey(),json);
-    // אימות אמיתי: קוראים בחזרה ומשווים
-    const back=LS.getItem(profileKey());
-    saveOk=(back===json);
+    const wrote=LS.setItem(profileKey(),json);
+    /* אימות מול האחסון הקבוע בלבד. LS.getItem היה נופל לזיכרון ומחזיר "זהה"
+       גם כשהדיסק לא נגע בנתון — וזו הייתה הסיבה ש"✓ נשמר" שיקר. */
+    const back=wrote?LS.persisted(profileKey()):null;
+    saveOk=!!wrote&&(back===json);
+    if(!saveOk) warnSaveFailed();
     lastSaveAt=new Date();
     LS.setItem('bagrutLastSave:'+currentProfileId,lastSaveAt.toISOString());
     scheduleFileSave();   // כתיבה אוטומטית לקובץ הנתונים
@@ -2865,6 +2898,18 @@ function loadUndo(){ try{ undoStack=JSON.parse(LS.getItem(undoKey()))||[]; }catc
 function persistUndo(){ try{ LS.setItem(undoKey(),JSON.stringify(undoStack.slice(-8))); }catch(e){} }
 /* קלט מספרי בטוח: קלט שאינו מספר חוקי אינו "אפס" ואינו NaN — הוא "ריק".
    +'abc' הוא NaN, ו-Math.max(0,Math.min(100,NaN)) הוא NaN — שנשמר בקובץ כ-null. */
+/* ══ עיגול ══
+   53×0.30 + 58×0.70 שווה בדיוק 56.5, אבל בנקודה צפה התוצאה היא
+   56.49999999999999 ו-Math.round מחזיר 56. מצאנו אלפי צירופים כאלה.
+   חיתוך ל-9 ספרות אחרי הנקודה מחזיר את המספר לערכו המתמטי לפני העיגול. */
+function rnd(v){
+  if(v===null||v===undefined||!Number.isFinite(+v)) return null;
+  return Math.round(+(+v).toFixed(9));
+}
+function rnd1(v){
+  if(v===null||v===undefined||!Number.isFinite(+v)) return null;
+  return Math.round(+(+v*10).toFixed(9))/10;
+}
 function numOr(val,lo,hi,dflt){
   if(val===''||val===null||val===undefined) return dflt;
   const n=(typeof val==='string')?Number(val.trim().replace(/[\u200e\u200f]/g,'')):Number(val);
@@ -3147,6 +3192,12 @@ function getUnits(st,subj){
 }
 /* חלוקות מגן/בחינה. הרשימה הייתה [70,60,50,40,30,20,0] וחסרו בה 80/90/100/10 —
    וגם "מגן בלבד", מצב קיים במקצועות שבהם אין בחינה חיצונית באותו מועד. */
+/* ══ שתי רצפות כיסוי ══
+   מתחת ל-COV_MIN אין סיווג בכלל — ציון אחד מתוך תשעה מקצועות אינו צפי.
+   בין COV_MIN ל-COV_SURE התלמידה כן נספרת (זה כל ערכו של האיתור המוקדם),
+   אבל מסומנת "מוקדם לקבוע" כדי שאיש לא יתבלבל בין איתור לבין הבטחה. */
+const COV_MIN=15;
+const COV_SURE=40;
 const SPLITS=[100,90,80,70,60,50,40,30,20,10,0];
 function splitLbl(sv){
   if(sv===0)   return 'ללא מגן — 100% בחינה';
@@ -3252,13 +3303,13 @@ function calcSubject(st,subj,opts){
   // ציון חלקי — לפי הרכיבים שכבר הוזנו בלבד (לתצוגה בלבד, לא נכנס לזכאות ולממוצע)
   let wDone=0;
   comps.forEach((c,i)=>{ if(!c.w) return; const d=details[i]; if(d&&d.val!==null&&d.val!==undefined) wDone+=(+c.w||0); });
-  const partial=(wDone>0)?Math.round(sum/wDone*100):null;
+  const partial=(wDone>0)?rnd(sum/wDone*100):null;
   const covered=wSum>0?Math.round(wDone/wSum*100):0;
   // נרמול: אם סך המשקלים שונה מ-100 (למשל אחרי הוספת עבודה נוספת) — האחוזים מתחלקים יחסית
   // ציון סופי מעוגל לשלם: 85.5 ← 86 · 85.4 ← 85
   const raw=(missing>0||wSum<=0)?null:sum/wSum*100;
-  const final=raw===null?null:Math.round(raw);
-  return {active:true,u,final,partial,covered,raw:raw===null?null:Math.round(raw*100)/100,missing,gaps,flips,details,predictedUsed,wSum,
+  const final=raw===null?null:rnd(raw);
+  return {active:true,u,final,partial,covered,raw:raw===null?null:Math.round(+(raw*100).toFixed(9))/100,missing,gaps,flips,details,predictedUsed,wSum,
           internalOnly:!!subj.internalOnly,
           blocker: final!==null&&final<state.thresholds.pass,
           borderline: final!==null&&final>=state.thresholds.pass&&final<60};
@@ -3278,21 +3329,39 @@ function calcStudent(st,opts){
     if(r.flips&&r.flips.length) flipList.push({subj,flips:r.flips});
     if(r.predictedUsed){ predicted=true; predIn.push(subj.name); }
   });
-  const avg=usum>0?Math.round(wsum/usum*10)/10:null;
+  const avg=usum>0?rnd1(wsum/usum):null;
   const totalUnits=SUBJECTS.reduce((a,s)=>{const r=per[s.id]; if(!r.active)return a; if(s.internalOnly&&!state.includeInternal)return a; return a+r.u;},0);
   const complete=missing.length===0;
-  const eligible=complete&&blockers.length===0&&anyFinal;
+  let eligible=complete&&blockers.length===0&&anyFinal;   // מעודכן בהמשך בתנאי היחידות
   // תנאי יח"ל להצטיינות: מתמטיקה 4-5 יח"ל + אנגלית 5 יח"ל
   const uMath=per.math&&per.math.active?per.math.u:0;
   const uEng=per.english&&per.english.active?per.english.u:0;
   const unitsOk=!state.reqUnits||(uMath>=4&&uEng>=5);
-  let status, cls;
   const T=state.thresholds;
+  /* ══ תנאי הזכאות שאפשר לחשב ══
+     קודם "זכאית" נקבעה מציון סופי אחד בלבד ומהיעדר נכשלים — ולכן תלמידה
+     עם לשון בלבד, 2 יח"ל, קיבלה "זכאית". סף היחידות ומקצוע מורחב מזכה
+     נגזרים מהנתונים שכבר יש, ולכן הם נבדקים. מה שאינו נמצא במערכת —
+     חובות לימוד ומעורבות חברתית — אינו נבדק, וזה נאמר במפורש במסך. */
+  const minU=(T.minUnits===undefined||T.minUnits===null)?21:+T.minUnits;
+  let uMax=0;
+  SUBJECTS.forEach(sj=>{ const r=per[sj.id];
+    if(!r||!r.active) return;
+    if(sj.internalOnly&&!state.includeInternal) return;
+    if(r.u>uMax) uMax=r.u; });
+  const unitsEnough=totalUnits>=minU;
+  const expandedOk=(state.reqExpanded===false)||uMax>=5;
+  const gaps2=[];
+  if(!unitsEnough) gaps2.push('חסרות '+Math.round((minU-totalUnits)*10)/10+' יח"ל מתוך '+minU);
+  if(!expandedOk)  gaps2.push('אין מקצוע מורחב של 5 יח"ל');
+  let status, cls;
   if(!anyFinal){ status='אין נתונים'; cls='b-miss'; }
   else if(blockers.length>0){ status='מעכבים: '+blockers.length; cls='b-bad'; }
   else if(!complete){ status='ממוצע חלקי'; cls='b-miss'; }
-  else if(avg>T.excel&&unitsOk){ status='מצטיינת ⭐'; cls='b-exc'; }
-  else if(avg>=T.potential&&avg<=T.excel&&unitsOk){ status='פוטנציאל הצטיינות'; cls='b-pot'; }
+  else if(gaps2.length){ status=gaps2[0]; cls='b-warn'; }
+  // הסף הוא "ומעלה": ממוצע 90.0 בדיוק הוא הצטיינות, לא פוטנציאל
+  else if(avg>=T.excel&&unitsOk){ status='מצטיינת ⭐'; cls='b-exc'; }
+  else if(avg>=T.potential&&avg<T.excel&&unitsOk){ status='פוטנציאל הצטיינות'; cls='b-pot'; }
   else{ status='זכאית'; cls='b-ok'; }
   /* ══════════ מסלול הצפי ══════════
      כל הסיווגים למעלה דורשים complete — אפס ציונים חסרים בכל המקצועות.
@@ -3301,6 +3370,7 @@ function calcStudent(st,opts){
      בחודשים שבהם היא הכי נחוצה.
      כאן מחושב מסלול שני, על בסיס מה שכבר הוזן בלבד. הוא לעולם אינו מתיימר
      להיות ודאי — הוא נקרא "צפי", ומוצג בנפרד מהסיווג הסופי. */
+  eligible=eligible&&unitsEnough&&expandedOk;
   let pw=0, pu=0, projBlockers=[], covW=0, covTot=0;
   SUBJECTS.forEach(subj=>{
     const r=per[subj.id];
@@ -3314,23 +3384,34 @@ function calcStudent(st,opts){
     // מעכב בצפי רק כשהמקצוע מכוסה מספיק — ציון בודד מתוך ארבעה לא מספיק כדי לקבוע
     if(sc<T.pass&&(r.final!==null||(r.covered||0)>=60)) projBlockers.push(subj);
   });
-  const projAvg=pu>0?Math.round(pw/pu*10)/10:null;
-  const coverage=covTot>0?Math.round(covW/covTot*100):0;
+  const projAvg=pu>0?rnd1(pw/pu):null;
+  /* ══ רצפת כיסוי ══
+     ציון פנימי אחד של 100 בלשון, וכל השאר ריק, הכריז "בדרך להצטיינות"
+     בכיסוי של 3%. אחוז הכיסוי הוצג — אבל לא הגביל כלום. צפי שמתיימר
+     לדעת ממה שלא הוזן אינו צפי, הוא ניחוש.
+       מתחת ל-COV_MIN  — אין סיווג בכלל.
+       מתחת ל-COV_EXC  — אין סיווג הצטיינות או פוטנציאל. */
+  const coverage=covTot>0?rnd(covW/covTot*100):0;
+  const covEnough=coverage>=COV_MIN, covSure=coverage>=COV_SURE;
   let projStatus='אין נתונים', projCls='b-miss';
   if(projAvg!==null){
     if(projBlockers.length){ projStatus='בסיכון · '+projBlockers.length+' מעכבים'; projCls='b-bad'; }
-    else if(projAvg>T.excel&&unitsOk){ projStatus='בדרך להצטיינות'; projCls='b-exc'; }
-    else if(projAvg>=T.potential&&unitsOk){ projStatus='בדרך לפוטנציאל'; projCls='b-pot'; }
+    else if(!covEnough){ projStatus='מעט מדי ציונים ('+coverage+'%)'; projCls='b-miss'; }
+    else if(gaps2.length){ projStatus=gaps2[0]; projCls='b-warn'; }
+    else if(projAvg>=T.excel&&unitsOk){ projStatus=covSure?'בדרך להצטיינות':'בדרך להצטיינות · מוקדם ('+coverage+'%)'; projCls='b-exc'; }
+    else if(projAvg>=T.potential&&unitsOk){ projStatus=covSure?'בדרך לפוטנציאל':'בדרך לפוטנציאל · מוקדם ('+coverage+'%)'; projCls='b-pot'; }
     else{ projStatus='בדרך לזכאות'; projCls='b-ok'; }
   }
   return {per,avg,totalUnits,blockers,missing,borderlines,gaps,flipList,eligible,complete,status,cls,predicted,predIn,unitsOk,
-          excellent: eligible&&avg>T.excel&&unitsOk,
-          potential: complete&&blockers.length===0&&avg>=T.potential&&avg<=T.excel&&unitsOk,
+          excellent: eligible&&avg>=T.excel&&unitsOk,
+          potential: eligible&&avg>=T.potential&&avg<T.excel&&unitsOk,
+          unitsEnough, expandedOk, unitGaps:gaps2, minUnits:minU, maxUnit:uMax,
           /* צפי — על בסיס מה שהוזן */
           projAvg, coverage, projBlockers, projStatus, projCls,
-          projEligible: projAvg!==null&&!projBlockers.length,
-          projExcellent: projAvg!==null&&!projBlockers.length&&projAvg>T.excel&&unitsOk,
-          projPotential: projAvg!==null&&!projBlockers.length&&projAvg>=T.potential&&projAvg<=T.excel&&unitsOk};
+          covEnough, covSure, projTentative:covEnough&&!covSure,
+          projEligible: projAvg!==null&&covEnough&&!projBlockers.length&&unitsEnough&&expandedOk,
+          projExcellent: projAvg!==null&&covEnough&&!projBlockers.length&&unitsEnough&&expandedOk&&projAvg>=T.excel&&unitsOk,
+          projPotential: projAvg!==null&&covEnough&&!projBlockers.length&&unitsEnough&&expandedOk&&projAvg>=T.potential&&projAvg<T.excel&&unitsOk};
 }
 /* ── "דורשות התייחסות": שורה אחת לכל תלמידה ──
    קודם הדוח נבנה מרשימת ההתראות השטוחה, ולכן תלמידה עם שלושה מעכבים ושני פערים
@@ -4067,6 +4148,7 @@ function renderDash(m){
     ${kpiCard('k6','chart',partialMode?pAvg:avgAll,'ממוצע שכבתי',partialMode?pAvg:avgAll,
       partialMode?'כולל ציונים חלקיים':'',true)}
   </div>`:''}
+  ${n?eligNoteHtml():''}
   ${n?deadPanel():''}
   ${n?focusPanel(results):''}
   ${n?`<div class="card" style="margin-bottom:16px; padding:${openBoxes.rings===false?'10px 17px':'17px'};">
@@ -4098,7 +4180,7 @@ function renderDash(m){
   </div>`:''}`;
   if(n>0) drawDashCharts(results,cls);
 }
-function avgOf(arr){ return arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10:null; }
+function avgOf(arr){ return arr.length?rnd1(arr.reduce((a,b)=>a+b,0)/arr.length):null; }
 function topTable(results){
   const GM=gradeMode(results);
   const rows=results.filter(x=>GM.score(x.r)!==null&&GM.score(x.r)!==undefined)
@@ -5918,6 +6000,17 @@ function calcPanel(studs){
    ולכן אותה שכבה בדיוק הראתה 4 מצטיינות בדשבורד ו-0 בדוח. הבעיה לא הייתה
    בדוח אלא בכך שכל מסך חישב את המצב בעצמו. כאן יש מקור אחד, וכל המסכים
    קוראים ממנו. */
+/* מה התוכנה בודקת ומה לא. חייב להיאמר, כי המילה "זכאית" נשמעת כמו
+   הכרעה של משרד החינוך — והיא אינה. */
+const ELIG_NOTE='הסיווג כאן מבוסס על <b>הציונים ועל היחידות בלבד</b>: '+
+  'סף יחידות, מקצוע מורחב, ציון עובר בכל מקצוע. '+
+  '<b>אינו כולל</b> חובות לימוד, מעורבות חברתית, אישור מנהל או כללי זכאות חריגה — '+
+  'נתונים שאינם מנוהלים בתוכנה. ההכרעה הסופית היא של משרד החינוך.';
+function eligNoteHtml(){
+  return `<details class="note" style="margin:0 0 10px; padding:8px 11px; background:#f8fafc; border:1px solid var(--line); border-radius:9px;">
+    <summary style="cursor:pointer; font-weight:700;">על מה מבוסס הסיווג — ומה אינו נבדק</summary>
+    <div style="margin-top:6px; line-height:1.8;">${ELIG_NOTE}</div></details>`;
+}
 function gradeMode(results){
   const R=results||[];
   const n=R.length;
@@ -5995,8 +6088,9 @@ function focusLever(st,r,target){
                   .sort((a,b)=>(b.share*(95-b.val))-(a.share*(95-a.val)));
   const pick=miss[0]||weak[0];
   if(!pick) return null;
-  const a95=projWith(st,pick.keys,95), a60=projWith(st,pick.keys,60);
-  if(a95===null||a60===null) return null;
+  const a100=projWith(st,pick.keys,100), a60=projWith(st,pick.keys,60);
+  const a95=projWith(st,pick.keys,95);
+  if(a100===null||a60===null) return null;
   // הקשר בין ציון הרכיב לממוצע הוא לינארי — שתי נקודות מספיקות כדי להפוך אותו
   const b=(a95-a60)/35;
   let need=null, reach=a95;
@@ -6009,7 +6103,7 @@ function focusLever(st,r,target){
       if(reach===null||reach<target) need=null;
     }
   }
-  return {pick, need, reach, a95, share:Math.round(pick.share*1000)/10};
+  return {pick, need, reach, a95, a100, share:Math.round(pick.share*1000)/10};
 }
 let focusAll=false;
 function toggleFocusAll(){ focusAll=!focusAll; renderKeepScroll(); }
@@ -6058,13 +6152,13 @@ function focusPanel(results){
         const cur=lv.pick.has?`<span class="note">כרגע ${lv.pick.val}</span> ` : '<span class="note">טרם הוזן</span> ';
         move=(lv.need!==null&&lv.need<=100)
           ? `${where}<br>${cur}<span class="needbadge">ציון ${lv.need} שם ⟵ ${fmt(lv.reach)} ✓</span>`
-          : `${where}<br>${cur}<span class="badge b-warn">גם 100 מגיע רק ל-${fmt(lv.a95===null?'':lv.a95)} — צריך יותר מרכיב אחד</span>`;
+          : `${where}<br>${cur}<span class="badge b-warn">גם 100 מגיע רק ל-${fmt(lv.a100===null?'':lv.a100)} — צריך יותר מרכיב אחד</span>`;
       }
       return `<tr>
         <td><span class="stName" onclick="openStudent('${x.st.id}')">${avatar(x.st.name,26)}<span class="name-link">${esc(x.st.name)}</span></span>
           <br><small style="color:var(--muted)">${esc(x.st.cls)}</small></td>
         <td class="${gradeClass(x.sc)}" style="font-weight:800; font-size:17px;">${fmt(x.sc)}</td>
-        <td><span class="pill">${x.r.coverage||0}%</span></td>
+        <td><span class="pill ${x.r.projTentative?'tentative':''}" ${x.r.projTentative?'title="פחות מ-'+COV_SURE+'% מהמשקל הוזן — הסיווג עלול להשתנות משמעותית"':''}>${x.r.coverage||0}%${x.r.projTentative?' ⏳':''}</span></td>
         <td>${over?`<span class="delta-up">+${Math.round((x.sc-T.excel)*10)/10} מעל הסף</span>`
              :gap<=0?`<span class="grade-warn" style="font-weight:800;">על הסף בדיוק — נדרש מעל ${T.excel}</span>`
                   :`<span class="${gap<=2?'grade-warn':''}" style="font-weight:800;">חסרים ${gap}</span>`}</td>
@@ -6282,6 +6376,7 @@ function buildReportHtml(cls){
     <div class="kpi k5"><div class="n">${blocked.length}</div><div class="t">${GM.lbl('risk')}</div></div>
     <div class="kpi k6"><div class="n">${avgAll===null?'—':avgAll}</div><div class="t">ממוצע${GM.partial?' צפי':''}</div></div>
   </div>
+  ${eligNoteHtml()}
   <h3 class="sec" id="rStud">טבלת תלמידות מפורטת</h3>
   <div class="scroll" style="max-height:none;">
   <table class="tbl grades"><thead><tr><th>שם</th><th class="cCls">כיתה</th>${SUBJECTS.map(s=>`<th>${esc(s.name)}</th>`).join('')}<th>ממוצע</th><th>סטטוס</th></tr></thead><tbody>
@@ -6501,8 +6596,23 @@ function renderSettings(m){
        <label><input type="checkbox" ${state.reqUnits?'checked':''} onchange="state.reqUnits=this.checked;save();renderKeepScroll();">
        "מצטיינת" ו"פוטנציאל" רק לתלמידות עם מתמטיקה 4/5 יח"ל <b>וגם</b> אנגלית 5 יח"ל</label>
      </div>
-     <div class="note"><b>התנאים המלאים:</b> אנגלית 5 יח"ל · מתמטיקה 4 או 5 · ממוצע <b>מעל 90</b> (90.0 בדיוק אינו מספיק) · ללא מקצועות מעכבים.<br>
+     <div class="note"><b>התנאים המלאים:</b> אנגלית 5 יח"ל · מתמטיקה 4 או 5 · ממוצע <b>90 ומעלה</b> · ללא מקצועות מעכבים · עמידה בתנאי הזכאות למטה.<br>
      תלמידה עם ממוצע גבוה שאינה עומדת בתנאי היח"ל תסומן "זכאית" ותקבל התראה בלשונית ההתראות.</div>`)}
+
+  ${sCard('elig','shield','תנאי זכאות',
+    'סף היחידות ומקצוע מורחב — שני התנאים שאפשר לחשב מהנתונים שבתוכנה.',
+    `<span class="pill">${state.thresholds.minUnits||21} יח"ל</span>${state.reqExpanded===false?'':'<span class="pill">מורחב נדרש</span>'}`,
+    `<div class="toolbar">
+       <label>מינימום יח"ל לזכאות:
+         <input type="number" min="0" max="60" step="1" value="${state.thresholds.minUnits===undefined?21:state.thresholds.minUnits}"
+           onchange="T_set('minUnits',this.value)" style="width:72px;"></label>
+       <label><input type="checkbox" ${state.reqExpanded===false?'':'checked'}
+         onchange="state.reqExpanded=this.checked;save();render();">
+         נדרש מקצוע מורחב אחד לפחות של 5 יח"ל</label>
+     </div>
+     <div class="note" style="margin-top:7px;">${ELIG_NOTE}</div>
+     <div class="note" style="margin-top:5px;">עד גרסה 17.8 התוכנה סימנה "זכאית" על סמך ציון סופי אחד בלבד — תלמידה
+       עם מקצוע אחד ו-2 יח"ל נספרה כזכאית. שני התנאים כאן מתקנים את זה.</div>`)}
 
   ${sCard('thr','target','ספי חישוב וכללי חישוב',
     'ציון מעכב, סף הצטיינות, היפוך אחוזים לטובת הבחינה, ומה נכנס לממוצע.',
@@ -6611,7 +6721,7 @@ function renderSettings(m){
 }
 
 function T_set(k,v){
-  const lim={pass:[0,100],excel:[0,100],potential:[0,100],gap:[0,100]}[k]||[0,100];
+  const lim={pass:[0,100],excel:[0,100],potential:[0,100],gap:[0,100],minUnits:[0,60]}[k]||[0,100];
   const n=numOr(v,lim[0],lim[1],undefined);
   if(n===undefined){ toast('יש להזין מספר בין '+lim[0]+' ל-'+lim[1]); renderKeepScroll(); return; }
   const t=Object.assign({},state.thresholds,{[k]:n});
@@ -7372,34 +7482,50 @@ async function exportStyled(cls,studs,sumRows,rawRows,anRows,fname){
       title:`דוח מצב בגרות · ${cls||'כל השכבה'} · ${when}${state.coord?' · רכזת: '+state.coord:''}`,
       cols:[{h:gx('שם'),k:gx('שם'),w:20},{h:gx('כיתה'),k:gx('כיתה'),w:10,align:'center'}]
         .concat(subjCols)
-        .concat([{h:'ממוצע משוקלל',k:'ממוצע משוקלל',w:12,align:'center',num:'0.0'},
-                 {h:'סה"כ יח"ל',k:'סה"כ יח"ל',w:10,align:'center'},
-                 {h:'מעכבים',k:'מעכבים',w:24,wrap:true},
-                 {h:'סטטוס',k:'סטטוס',w:16,align:'center'}]),
+        /* המפתחות כאן היו קשיחים ('ממוצע משוקלל'), בעוד הייצוא הרגיל עבר
+           לשמות דינמיים ('ממוצע צפי') במצב חלקי. התוצאה: עמודות ריקות
+           בקובץ המעוצב. עכשיו שני הנתיבים נגזרים מאותן שורות. */
+        .concat((()=>{
+          const k0=Object.keys(sumRows[0]||{});
+          const avgK=k0.indexOf('ממוצע צפי')>-1?'ממוצע צפי':'ממוצע משוקלל';
+          const extra=k0.indexOf('כיסוי %')>-1?[{h:'כיסוי %',k:'כיסוי %',w:9,align:'center'}]:[];
+          return [{h:avgK,k:avgK,w:12,align:'center',num:'0.0'}].concat(extra).concat([
+            {h:'סה"כ יח"ל',k:'סה"כ יח"ל',w:10,align:'center'},
+            {h:'מעכבים',k:'מעכבים',w:24,wrap:true},
+            {h:'סטטוס',k:'סטטוס',w:16,align:'center'}]);
+        })()),
       rows:sumRows.map(r=>{ const c={...r}; return c; }), cellStyle:sumStyle,
       totals:(()=>{
-        const avgs=sumRows.map(r=>r['ממוצע משוקלל']).filter(v=>typeof v==='number');
+        const avgK=Object.keys(sumRows[0]||{}).indexOf('ממוצע צפי')>-1?'ממוצע צפי':'ממוצע משוקלל';
+        const avgs=sumRows.map(r=>r[avgK]).filter(v=>typeof v==='number');
         const t={}; t[gx('שם')]='סה"כ '+sumRows.length+' '+gx('תלמידות');
-        t['ממוצע משוקלל']=avgs.length?Math.round(avgOf(avgs)*10)/10:'';
+        t[avgK]=avgs.length?Math.round(avgOf(avgs)*10)/10:'';
         t['מעכבים']=sumRows.filter(r=>r['מעכבים']).length+' עם מעכבים';
         return t; })() },
     { name:'נתונים גולמיים',
       title:`נתונים מלאים לייבוא חוזר · ${cls||'כל השכבה'} · ${when}`,
-      cols:Object.keys(rawRows[0]||{'שם':1}).map(k=>({h:k,k,wrap:k.length>18})),
+      /* העמודות נבנו מהשורה הראשונה בלבד. הערה שהופיעה לראשונה אצל
+         התלמידה השנייה יצרה מפתח שלשורה הראשונה אין — ולכן נשמטה
+         מהקובץ בשקט. עכשיו איחוד של כל השורות, בסדר ההופעה. */
+      cols:(()=>{ const seen=new Set(), ks=[];
+        (rawRows||[]).forEach(r=>Object.keys(r||{}).forEach(k=>{ if(!seen.has(k)){ seen.add(k); ks.push(k); } }));
+        if(!ks.length) ks.push('שם');
+        return ks.map(k=>({h:k,k,wrap:k.length>18})); })(),
       rows:rawRows },
     { name:'ניתוח כיתתי',
       title:`ניתוח לפי כיתה · ${when}`,
-      cols:[{h:'כיתה',k:'כיתה',w:12},{h:'תלמידות',k:'תלמידות',w:10,align:'center'},
-            {h:'זכאיות',k:'זכאיות',w:10,align:'center'},{h:'מצטיינות',k:'מצטיינות',w:11,align:'center'},
-            {h:'פוטנציאל',k:'פוטנציאל',w:11,align:'center'},{h:'עם מעכבים',k:'עם מעכבים',w:12,align:'center'},
-            {h:'ממוצע',k:'ממוצע',w:10,align:'center',num:'0.0'}],
+      cols:Object.keys(anRows[0]||{'כיתה':1}).map(k=>({h:k,k,
+        w:k==='כיתה'?12:(/ממוצע/.test(k)?11:11), align:k==='כיתה'?undefined:'center',
+        num:/ממוצע/.test(k)?'0.0':undefined})),
       rows:anRows,
-      cellStyle:(r,c)=>c.k==='עם מעכבים'&&r[c.k]>0?{font:{color:{argb:XL.red},bold:true}}:null,
+      cellStyle:(r,c)=>/מעכבים|בסיכון/.test(c.k)&&r[c.k]>0?{font:{color:{argb:XL.red},bold:true}}:null,
       totals:(()=>{ const s=k=>anRows.reduce((a,r)=>a+(+r[k]||0),0);
-        const av=anRows.map(r=>r['ממוצע']).filter(v=>typeof v==='number');
-        return {'כיתה':'סה"כ','תלמידות':s('תלמידות'),'זכאיות':s('זכאיות'),'מצטיינות':s('מצטיינות'),
-                'פוטנציאל':s('פוטנציאל'),'עם מעכבים':s('עם מעכבים'),
-                'ממוצע':av.length?Math.round(avgOf(av)*10)/10:''}; })() }
+        const avgK=Object.keys(anRows[0]||{}).filter(k=>/ממוצע/.test(k))[0]||'ממוצע';
+        const av=anRows.map(r=>r[avgK]).filter(v=>typeof v==='number');
+        const t={'כיתה':'סה"כ'};
+        Object.keys(anRows[0]||{}).forEach(k=>{ if(k==='כיתה'||/ממוצע/.test(k)) return; t[k]=s(k); });
+        t[avgK]=av.length?Math.round(avgOf(av)*10)/10:'';
+        return t; })() }
   ];
   /* ── גיליון הערות ──
      ההערות היו רק בדוח המודפס. ב"נתונים גולמיים" הופיעה רק ההערה הכללית של
@@ -7498,7 +7624,19 @@ function moeParse(wb,sheetName){
   return {recs,skipped,unknown};
 }
 /* התאמת רשומה לתלמידה: ת"ז קודם, ואם אין — שם מנורמל */
-function moeNormName(s){ return String(s||'').replace(/\s+/g,' ').trim(); }
+/* מקף עברי, מקף רגיל, גרש וגרשיים — אותו שם שנכתב אחרת. בלי זה
+   "רחל בן־דוד" ו"רחל בן דוד" נחשבו לשתי תלמידות שונות. */
+function moeNormName(s){
+  return String(s||'')
+    .replace(/[\u05BE\u2010-\u2015\u2212-]/g,' ')   // כל סוגי המקפים
+    .replace(/["'`\u05F3\u05F4\u2018\u2019\u201C\u201D]/g,'')
+    .replace(/\s+/g,' ').trim();
+}
+/* ══ שיוך רשומה לתלמידה ══
+   הקוד הקודם בדק `if(!st)` — כלומר ת"ז שאינה תואמת ות"ז שחסרה נראו לו
+   אותו דבר, והוא נפל לשם בשני המקרים. אבל ת"ז סותרת היא ראיה *נגד*
+   ההתאמה. במיוחד כשתלמידה חדשה עם שם נפוץ אינה עדיין בסימולטור —
+   הציונים שלה נכתבו על תלמידה קיימת באותו שם, בשקט. */
 function moeMatch(recs,studs){
   const byTz={}, byName={};
   studs.forEach(st=>{
@@ -7507,9 +7645,22 @@ function moeMatch(recs,studs){
   });
   const matched=[], unmatched=[];
   recs.forEach(r=>{
-    let st=r.tz?byTz[r.tz]:null, how=st?'tz':'';
-    if(!st&&r.name){ const l=byName[moeNormName(r.name)]; if(l&&l.length===1){ st=l[0]; how='name'; } }
-    if(st) matched.push({...r,st,how}); else unmatched.push(r);
+    let st=r.tz?byTz[r.tz]:null, how=st?'tz':'', why='';
+    if(!st&&r.name){
+      const l=byName[moeNormName(r.name)];
+      if(!l||!l.length) why='אין תלמידה בשם הזה';
+      else if(l.length>1) why='יש '+l.length+' תלמידות באותו שם';
+      else{
+        const cand=l[0], candTz=cand.tz?moeTz(cand.tz):'';
+        if(r.tz&&candTz&&candTz!==r.tz){
+          // שתי ת"ז קיימות וסותרות — לא משייכים לבד
+          why='ת"ז סותרת: בקובץ '+r.tz+' ובסימולטור '+candTz;
+          st=null; how='tzConflict';
+        }else{ st=cand; how='name'; }
+      }
+    }
+    if(st) matched.push({...r,st,how});
+    else unmatched.push({...r,how,why:why||'לא נמצאה תלמידה מתאימה'});
   });
   return {matched,unmatched};
 }
@@ -7534,8 +7685,40 @@ function moePickKey(st,rec){
   return {...rec.cand[0],why:'fallback'};
 }
 /* השוואה: מה חדש, מה זהה, מה סותר */
+/* ══ שני מועדים לאותו שאלון ══
+   קודם שתי השורות עברו בלולאה: הציונים נכתבו בכל אחת ולכן *האחרון* ניצח,
+   וה-moe נשמר רק בפעם הראשונה ולכן *הראשון* ניצח. שתי מדיניות הפוכות באותה
+   לולאה — והתוצאה הייתה ציונים ממועד אחד וציון רשמי מהמועד האחר.
+   כאן נבחר מועד אחד לכל (תלמידה × רובריקה), והכול מגיע ממנו. */
+function moePickMoed(recs){
+  if(recs.length<2) return {rec:recs[0],alts:[]};
+  const score=r=>[
+    (r.final===null||r.final===undefined)?-1:r.final,   // קודם כול: הציון הרשמי הגבוה
+    +String(r.year||'').replace(/[^0-9]/g,'')||0,       // אחר כך: השנה המאוחרת
+    /קיץ/.test(r.moed||'')?2:/חורף/.test(r.moed||'')?1:0
+  ];
+  const sorted=recs.slice().sort((a,b)=>{
+    const A=score(a), B=score(b);
+    for(let i=0;i<A.length;i++) if(A[i]!==B[i]) return B[i]-A[i];
+    return 0;
+  });
+  return {rec:sorted[0],alts:sorted.slice(1)};
+}
 function moeDiff(matched){
   const out=[];
+  /* קיבוץ לפי תלמידה ורובריקה, ובחירת מועד אחד */
+  const groups={};
+  matched.forEach(rec=>{
+    const c=moePickKey(rec.st,rec);
+    const sig=rec.st.id+'|'+c.key;
+    (groups[sig]=groups[sig]||[]).push(rec);
+  });
+  const chosen=[];
+  Object.keys(groups).forEach(sig=>{
+    const pick=moePickMoed(groups[sig]);
+    chosen.push({...pick.rec, _alts:pick.alts});
+  });
+  matched=chosen;
   matched.forEach(rec=>{
     const st=rec.st, c=moePickKey(st,rec), key=c.key;
     const g=st.grades||{};
@@ -7543,10 +7726,23 @@ function moeDiff(matched){
       if(val===null) return;
       const k=key+'.'+part, cur=g[k];
       const cmp=(cur===undefined||cur===null)?'new':(Number(cur)===Number(val)?'same':'conflict');
-      out.push({rec,st,key,k,part,label:field,cur:cur===undefined?null:cur,val,state:cmp,why:c.why});
+      out.push({rec,st,key,k,part,label:field,cur:cur===undefined?null:cur,val,state:cmp,why:c.why,how:rec.how});
     };
     add('m','מגן',rec.school);
     add('e','בחינה',rec.exam);
+    /* הציון הסופי הרשמי נשמר קודם כתופעת לוואי של החלת ציון. אם המגן
+       והבחינה כבר היו זהים לקובץ — שתי השורות יצאו מוקדם, ו-st.moe לא
+       נכתב כלל. כלומר: ככל שהרכזת הזינה נכון יותר, כך קטן הסיכוי שתקבל
+       את המספר הרשמי. עכשיו זו שורה בפני עצמה. */
+    if(rec.final!==null&&rec.final!==undefined){
+      const curMoe=(st.moe||{})[key];
+      const curF=(curMoe&&curMoe.f!==undefined&&curMoe.f!==null)?curMoe.f:null;
+      const sameMoed=curMoe&&String(curMoe.moed||'')===String(rec.moed||'')&&String(curMoe.year||'')===String(rec.year||'');
+      const cmpF=(curF===null)?'new':(Number(curF)===Number(rec.final)&&sameMoed?'same':'conflict');
+      out.push({rec,st,key,k:key,part:'final',label:'ציון סופי רשמי',
+        cur:curF,val:rec.final,state:cmpF,why:c.why,how:rec.how,
+        alts:(rec._alts||[]).map(a=>({moed:a.moed,year:a.year,final:a.final,school:a.school,exam:a.exam}))});
+    }
     // סמל שאלון
     const curCode=String((st.codes||{})[key]||'');
     if(String(c.opt)!==curCode){
@@ -7563,23 +7759,21 @@ function moeDiff(matched){
    ולכן אין דרך לשחזר אותו — אבל כן צריך לראות אותו. */
 function moeApply(diff,picks){
   let nG=0,nC=0,nF=0;
-  const seen={};
   diff.forEach((x,i)=>{
     if(x.state==='same') return;
     if(x.state==='conflict'&&(picks[i]||'file')!=='file') return;   // המשתמשת בחרה להשאיר את שלה
     const st=(state.students||[]).find(s=>s.id===x.st.id); if(!st) return;
     if(x.part==='code'){ st.codes=st.codes||{}; st.codes[x.key]=x.val; nC++; return; }
+    if(x.part==='final'){
+      st.moe=st.moe||{};
+      st.moe[x.key]={f:x.rec.final,moed:x.rec.moed,year:x.rec.year,book:x.rec.book,
+                     alts:(x.alts&&x.alts.length)?x.alts:undefined,at:Date.now()};
+      nF++; return;
+    }
     st.grades=st.grades||{};
     st.grades[x.k]=x.val;
     if(st.gstat) delete st.gstat[x.k];        // הגיע מהמשרד ⇒ מדווח ⇒ שחור
     nG++;
-    const sig=st.id+'|'+x.key;
-    if(!seen[sig]){
-      seen[sig]=1;
-      st.moe=st.moe||{};
-      st.moe[x.key]={f:x.rec.final,moed:x.rec.moed,year:x.rec.year,book:x.rec.book,at:Date.now()};
-      if(x.rec.final!==null) nF++;
-    }
   });
   return {nG,nC,nF};
 }
@@ -7696,8 +7890,20 @@ function importExcel(input){
       const moeSheet=moeDetect(wb);
       if(moeSheet){ moeStart(wb,moeSheet); input.value=''; return; }   // דוח ציונים של משרד החינוך
       const wsName=wb.SheetNames.includes('נתונים גולמיים')?'נתונים גולמיים':wb.SheetNames[0];
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wsName]);
+      /* הייצוא המעוצב מוסיף שורת כותרת מעל שמות העמודות, והייבוא קרא תמיד
+         את שורה 1 ככותרות — כך שהגיליון שכתוב עליו "לייבוא חוזר" לא היה
+         ניתן לייבוא. עכשיו מחפשים את השורה שבה באמת יש "שם". */
+      let rows=XLSX.utils.sheet_to_json(wb.Sheets[wsName]);
+      if(!rows.length||!(('שם') in (rows[0]||{}))){
+        const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wsName],{header:1,blankrows:false});
+        let hdrRow=-1;
+        for(let i=0;i<Math.min(aoa.length,8);i++){
+          if((aoa[i]||[]).some(c=>String(c||'').trim()==='שם')){ hdrRow=i; break; }
+        }
+        if(hdrRow>0) rows=XLSX.utils.sheet_to_json(wb.Sheets[wsName],{range:hdrRow});
+      }
       if(!rows.length){toast('הגיליון ריק');return;}
+      if(!(('שם') in (rows[0]||{}))){ toast('לא נמצאה עמודת "שם" בגיליון'); return; }
       let added=0, updated=0;
       rows.forEach(row=>{
         const name=String(row['שם']||'').trim(); if(!name) return;
@@ -8125,7 +8331,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='17.7';
+const APP_VERSION='17.8';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -8848,6 +9054,11 @@ function moeRenderReview(){
   const nSame=d.filter(x=>x.state==='same').length;
   const conf=d.map((x,i)=>({x,i})).filter(o=>o.x.state==='conflict');
   const amb=d.filter(x=>x.why==='ambiguous').length;
+  /* שיוך לפי שם ושיוך לפי ת"ז נראו קודם זהים לחלוטין על המסך. עכשיו
+     הרכזת רואה על מה הסתמכנו, ובמיוחד — מה סירבנו לשייך ולמה. */
+  const byName=[...new Set(d.filter(x=>x.how==='name').map(x=>x.st.id))].length;
+  const tzConf=(moeJob.unmatched||[]).filter(u=>u.how==='tzConflict');
+  const multi=d.filter(x=>x.part==='final'&&x.alts&&x.alts.length);
   const lbl=p=>p==='m'?'מגן':p==='e'?'בחינה':'סמל שאלון';
   const subjOf=k=>{ const sj=SUBJ_MAP[String(k).split('.')[0]]; return sj?sj.name:k; };
   const compOf=(st,k)=>{ const p=String(k).split('.'); const sj=SUBJ_MAP[p[0]]; if(!sj) return k;
@@ -8864,6 +9075,9 @@ function moeRenderReview(){
       <b>${nNew}</b> ציונים חדשים ייכנסו · <b>${nSame}</b> כבר זהים · <b class="${conf.length?'g-red':''}">${conf.length}</b> סותרים
       ${moeJob.unmatched.length?` · <b>${moeJob.unmatched.length}</b> שורות ללא תלמידה מתאימה`:''}
       ${amb?`<br><span class="g-red">⚠️ ${amb} מהם ברובריקה שיש בה ציונים בלי סמל שאלון — לא ודאי שזו אותה בחינה.</span>`:''}
+      ${byName?`<br><span style="color:#9a3412;">👤 ${byName} תלמידות זוהו <b>לפי שם בלבד</b> — אין להן ת"ז באחד הצדדים. כדאי לוודא שאלה הנכונות.</span>`:''}
+      ${tzConf.length?`<br><span class="g-red">🛑 ${tzConf.length} שורות <b>לא שויכו</b> כי תעודת הזהות סותרת. הן מופיעות למטה.</span>`:''}
+      ${multi.length?`<br><span style="color:#1e40af;">🗓️ ${multi.length} שאלונים הופיעו <b>ביותר ממועד אחד</b>. נבחר המועד שהציון הרשמי בו הגבוה ביותר, והציונים והציון הרשמי מגיעים מאותה שורה. המועד האחר נשמר ומוצג בכרטיס התלמידה.</span>`:''}
       <br>כל ציון שייכנס יסומן <b>שחור — דווח למשרד</b>.
     </div>
   </div>
@@ -8883,6 +9097,15 @@ function moeRenderReview(){
     <button class="btn sec sm" onclick="moePickAll('file')">הכול מהקובץ</button>
     <button class="btn sec sm" onclick="moePickAll('mine')">הכול שלי</button>
   </div>`:'<div class="note" style="margin-bottom:10px;">אין סתירות — הכול ייכנס ישירות.</div>'}
+  ${moeJob.unmatched.length?`<details style="margin-top:8px;" ${tzConf.length?'open':''}>
+    <summary class="note" style="cursor:pointer;">${moeJob.unmatched.length} שורות ללא תלמידה מתאימה — הסיבה לכל אחת</summary>
+    <div class="scroll" style="max-height:150px; margin-top:6px;"><table class="tbl"><thead><tr>
+      <th>שם בקובץ</th><th>ת"ז בקובץ</th><th>שאלון</th><th>הסיבה</th></tr></thead><tbody>
+    ${moeJob.unmatched.slice(0,60).map(u=>`<tr ${u.how==='tzConflict'?'style="background:#fff1f2;"':''}>
+      <td>${esc(u.name||'—')}</td><td>${esc(u.tz||'—')}</td>
+      <td>${esc(u.qname||u.code||'—')}</td>
+      <td class="${u.how==='tzConflict'?'g-red':''}">${esc(u.why||'')}</td></tr>`).join('')}
+    </tbody></table></div></details>`:''}
   ${moeJob.skipped.length?`<details style="margin-top:8px;"><summary class="note" style="cursor:pointer;">${moeJob.skipped.length} שורות דולגו</summary>
     <div class="note" style="max-height:120px; overflow:auto; margin-top:6px;">
     ${moeJob.skipped.slice(0,40).map(s=>`שורה ${s.row} — ${esc(s.why)}`).join('<br>')}</div></details>`:''}
