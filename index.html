@@ -5748,6 +5748,28 @@ function predPresets(){
      go:`simPredict=true;state.predLevel=-10;save();renderKeepScroll()`}
   ];
 }
+/* ══ למה התרחיש לא משנה כלום ══
+   החיזוי ממלא *ציון בחינה חסר* מתוך ציון המגן, או מתוך מבחן כיתה.
+   אם אין אף רכיב עם מגן בלי בחינה ואין מבחני כיתה — אין ממה לחזות,
+   וכל התרחישים הכלליים יחזירו בדיוק את אותם מספרים. המסך אמר רק
+   "לא משנה כלום — עדיין", והרכזת הסיקה בצדק שמשהו שבור. */
+function simWhyFlat(studs){
+  let magenOnly=0, tests=0, bothIn=0, empty=0;
+  (studs||[]).forEach(st=>{
+    SUBJECTS.forEach(sj=>{
+      const u=getUnits(st,sj); if(!u) return;
+      if(testAvg(st,sj.id)!==null) tests++;
+      getCompsFor(st,sj,u).forEach((c,i)=>{
+        if(c.t!=='e'||!c.w) return;
+        const k=sj.id+'.'+i, g=st.grades||{};
+        const m=g[k+'.m']!==undefined&&g[k+'.m']!==null;
+        const e=g[k+'.e']!==undefined&&g[k+'.e']!==null;
+        if(m&&e) bothIn++; else if(m) magenOnly++; else if(!e) empty++;
+      });
+    });
+  });
+  return {magenOnly,tests,bothIn,empty,canPredict:magenOnly>0||tests>0};
+}
 function renderSim(m){
   const opts={split:simSplit===''?null:+simSplit, predict:simPredict, bonus:+simBonus, sim:true};
   const fltSubj=null;   // הסינון בסימולציה חוצה מקצועות (ממוצע/סטטוס) — לא קשור לבורר המקצוע
@@ -5841,6 +5863,12 @@ function renderSim(m){
   </div>
   <div class="card" style="margin-bottom:14px;">
     ${secHead('target','תרחישים כלליים','חלים על כל התלמידות המוצגות · אופציונלי')}
+    ${(()=>{ const w=simWhyFlat(studs);
+      return w.canPredict?'':`<div class="alert-item al-warn" style="margin-bottom:9px;">
+        <span>${ic('warn',15)}</span>
+        <span><b>התרחישים כאן לא ישנו כלום בנתונים הנוכחיים.</b>
+        הם ממלאים ציון בחינה חסר מתוך המגן או ממבחני הכיתה — ואין כרגע אף רכיב כזה.
+        שינוי ידני בטבלה למטה כן יעבוד.</span></div>`; })()}
     <div class="preGrid">
       ${predPresets().map(x=>`<button class="preCard ${x.on?'on':''}" onclick="${x.go}">
         <span class="preT">${x.t}${x.rec?'<span class="preRec">מומלץ</span>':''}</span>
@@ -5912,8 +5940,17 @@ function renderSim(m){
         ${d!==null&&d!==0?`<span class="dBadge ${d>0?'up':'dn'}">${d>0?'▲+':'▼'}${d>0?d:Math.abs(d)}</span>`:''}</span></td>
       <td><span class="cmp"><span class="badge ${CL(x.b)}">${ST(x.b)}</span>${ic('arrowLeft',13)}<span class="badge ${CL(x.s)}">${ST(x.s)}</span></span></td></tr>`;}).join('')}
     </tbody></table></div>`
-    :emptyState('lab','התרחיש לא משנה כלום — עדיין',
-      'שנו ציון בטבלת הניסוי, סמנו 🔮 חיזוי אוטומטי, או בחרו תרחיש כללי — וכאן יופיעו התלמידות שמצבן משתנה.',null,[])}
+    :(()=>{ const w=simWhyFlat(studs);
+      if(!w.canPredict&&!nSim) return emptyState('lab','התרחישים הכלליים לא יכולים לשנות כלום בנתונים האלה',
+        'החיזוי ממלא <b>ציון בחינה שחסר</b> — מתוך ציון המגן, או מתוך ממוצע מבחני הכיתה. '+
+        'בנתונים הנוכחיים אין אף רכיב עם מגן בלי בחינה ('+w.bothIn+' רכיבים כבר מלאים, '+w.empty+' ריקים לגמרי), '+
+        'ואין מבחני כיתה. לכן אין ממה לחזות, וכל התרחישים מחזירים את אותם מספרים.<br><br>'+
+        '<b>מה כן יעבוד עכשיו:</b> לשנות ציון ידנית בטבלת הניסוי למטה — זה תמיד משפיע. '+
+        'ברגע שיהיו ציוני מגן בלי בחינה, או מבחני כיתה, התרחישים הכלליים יתחילו לעבוד.',null,
+        [`<button class="btn sec" onclick="setTab('entry')">${ic('pen',15)}להזנת ציונים</button>`]);
+      return emptyState('lab','התרחיש לא משנה כלום — עדיין',
+        'שנו ציון בטבלת הניסוי, סמנו 🔮 חיזוי אוטומטי, או בחרו תרחיש כללי — וכאן יופיעו התלמידות שמצבן משתנה.',null,[]);
+    })()}
   </div>`;
 }
 // טבלת עריכה של הסימולציה: מציגה את הציונים האמיתיים, שינויים נשמרים בשכבת הניסוי בלבד
@@ -8537,7 +8574,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='18.6';
+const APP_VERSION='18.8';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -9304,6 +9341,7 @@ function moeRenderReview(){
   <div class="toolbar" style="margin-top:8px;">
     <button class="btn sec sm" onclick="moePickAll('file')">הכול מהקובץ</button>
     <button class="btn sec sm" onclick="moePickAll('mine')">הכול שלי</button>
+    ${clash.length?`<span class="note" style="margin-inline-start:6px;">⚡ ${clash.length} שורות של התנגשות שאלונים אינן נכללות — הן דורשות בחירה נפרדת.</span>`:''}
   </div>`:'<div class="note" style="margin-bottom:10px;">אין סתירות — הכול ייכנס ישירות.</div>'}
   ${clash.length?`<div class="card" style="margin:8px 0; border:2px solid var(--bad); padding:10px 12px;">
     <b class="g-red">⚡ שאלונים שמתחרים על אותה רובריקה</b>
@@ -9333,7 +9371,14 @@ function moeRenderReview(){
   </div>`;
 }
 function moePick(i,which){ if(!moeJob) return; moeJob.picks[i]=which; moeRenderReview(); }
-function moePickAll(which){ if(!moeJob) return; moeJob.diff.forEach((x,i)=>{ if(x.state==='conflict') moeJob.picks[i]=which; }); moeRenderReview(); }
+/* "הכול מהקובץ" היא פעולה גורפת על סתירות רגילות — אותו ציון, שני ערכים.
+   התנגשות שאלונים היא החלטה אחרת לגמרי: איזה שאלון בכלל שייך לרובריקה.
+   היא נשארת מחוץ לפעולה הגורפת, אחרת לחיצה אחת דורסת ציון קיים. */
+function moePickAll(which){
+  if(!moeJob) return;
+  moeJob.diff.forEach((x,i)=>{ if(x.state==='conflict'&&x.why!=='clash') moeJob.picks[i]=which; });
+  moeRenderReview();
+}
 function moeClose(){ const el=document.getElementById('cfModal'); if(el) el.classList.remove('show'); moeJob=null; }
 function moeConfirm(){
   if(!moeJob) return;
