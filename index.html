@@ -508,6 +508,13 @@ table.tbl.grades tr:hover td:first-child{background:#f2f6ff;}
 .deadTag{font-size:10px; font-weight:800; color:#9a3412; background:#ffedd5; border:1px solid #fdba74;
   border-radius:6px; padding:1px 5px; margin-top:3px; white-space:nowrap; text-align:center;}
 .pill.tentative{background:#fff7ed; border-color:#fdba74; color:#9a3412; font-weight:700;}
+.roBar{display:flex; align-items:center; gap:9px; flex-wrap:wrap; padding:9px 13px; margin-bottom:12px;
+  background:linear-gradient(140deg,#eef2ff,#faf5ff); border:1px solid #c7d2fe; border-radius:12px;
+  font-size:13px; color:#3730a3;}
+.roBar b{color:#1e1b4b;}
+body.ro input:disabled,body.ro select:disabled{opacity:.72; cursor:not-allowed;}
+.socWrap{display:inline-flex; align-items:center; gap:4px; color:var(--muted);}
+.socSel{font-size:11.5px; font-weight:700; height:28px; padding:2px 6px; max-width:150px;}
 .thW{font-weight:700; color:var(--brand); opacity:.85;}
 .thW.off{color:var(--muted); font-weight:400;}
 .subj-card{border:1px solid var(--line); border-radius:13px; margin-bottom:11px; overflow:hidden; box-shadow:0 2px 10px rgba(30,41,80,.05);}
@@ -1639,6 +1646,120 @@ var SS={
   setItem:function(k,v){ _memS[k]=String(v); try{ sessionStorage.setItem(k,v); }catch(e){} },
   removeItem:function(k){ delete _memS[k]; try{ sessionStorage.removeItem(k); }catch(e){} }
 };
+/* ══════════ מצב צפייה ══════════
+   מחנכת או סגנית שצריכה לראות את התמונה בלי לשנות כלום.
+   שתי שכבות הגנה:
+     1. כל פונקציה שכותבת למצב עוברת דרך roGuard ומסרבת.
+     2. אחרי כל רינדור, כל פקד שמפעיל פונקציה כזאת מושבת ויזואלית —
+        כך שלא רק שלא נשמר, גם לא נראה שאפשר.
+   ⚠️ זו הגנה מפני טעות, לא מפני מי שמתעקש: הנתונים יושבים בדפדפן,
+   ומי שיודע לפתוח כלי פיתוח יכול לעקוף. לכן זה נאמר במפורש במסך. */
+let viewOnly=false;
+try{ viewOnly=LS.getItem('bagrutViewOnly')==='1'; }catch(e){}
+const RO_FUNCS=('T_set addBonus addClass addStudent addXComp addXSubj applyCodeToClass applyEntryColor '+
+ 'applyMugbarPreset bulkAdd bulkApply bulkClear bulkCodesAll clearSim commitSim cycleGstat deadDrop '+
+ 'deadUnOv delClass delNote delStudent delXComp delXSubj doCellUndo doUndo driveResolve factoryReset '+
+ 'giApply hideComp importExcel importJSON importSimulator loadDataset loadDemo moeConfirm newProfile '+
+ 'renameDup resetOv restoreSnap saveNote saveSubjStruct setCode setColCode setCompCode setCompName '+
+ 'setCustom setGender setGrade setGradeSim setMugbarName setOv setSocial setStudentClass setTest setTz '+
+ 'setUnits setXCompType setXSubjInternal setXSubjName setXSubjOpts showComp tdAdd tdDel tdSet testSave '+
+ 'togglePro uploadLogo setLock clearLock pickCode openGradeImport moePick moePickAll deleteProfile '+
+ 'setProfileName addStudents').split(/\s+/).filter(Boolean);
+const RO_RE=new RegExp('\\b('+RO_FUNCS.join('|')+')\\s*\\(');
+function roGuard(){
+  if(!viewOnly) return false;
+  toast('מצב צפייה — אי אפשר לשנות נתונים. ליציאה: הגדרות ← מצב צפייה.');
+  return true;
+}
+function applyReadOnly(){
+  if(typeof document==='undefined') return 0;
+  const root=document.getElementById('main'); if(!root) return 0;
+  let n=0;
+  const all=root.querySelectorAll?root.querySelectorAll('input,select,textarea,button'):[];
+  Array.prototype.forEach.call(all,el=>{
+    const h=(el.getAttribute&&(
+      (el.getAttribute('onclick')||'')+' '+(el.getAttribute('onchange')||'')+' '+
+      (el.getAttribute('oninput')||'')+' '+(el.getAttribute('oncontextmenu')||'')))||'';
+    if(!viewOnly){ if(el.dataset&&el.dataset.roOff){ el.disabled=false; delete el.dataset.roOff; } return; }
+    if(!RO_RE.test(h)) return;
+    el.disabled=true;
+    if(el.dataset) el.dataset.roOff='1';
+    if(!el.title) el.title='מצב צפייה — לא ניתן לשנות';
+    n++;
+  });
+  return n;
+}
+function roBanner(){
+  if(!viewOnly) return '';
+  return `<div class="roBar">${ic('lock',15)}
+    <span><b>מצב צפייה</b> — אפשר לראות הכול: ציונים, דוחות, סימולציה ותמונה חינוכית.
+    <b>שינוי נתונים חסום.</b></span>
+    <button class="btn sec sm" onclick="exitViewOnly()">${ic('key',13)}יציאה ממצב צפייה</button>
+  </div>`;
+}
+async function enterViewOnly(){
+  if(!confirm('להפעיל מצב צפייה?\n\n• אפשר לראות הכול — ציונים, דוחות, סימולציה.\n'+
+    '• שינוי, מחיקה, ייבוא וסנכרון ידני — חסומים.\n\n'+
+    (lockHash?'ליציאה תידרש סיסמת הנעילה.':
+     '⚠️ לא הוגדרה סיסמת נעילה, ולכן כל אחד יוכל לצאת מהמצב בלחיצה.\nמומלץ להגדיר סיסמה קודם (הגדרות ← נעילה).')+
+    '\n\nלהמשיך?')) return;
+  viewOnly=true;
+  try{ LS.setItem('bagrutViewOnly','1'); }catch(e){}
+  render();
+  toast('מצב צפייה פעיל');
+}
+async function exitViewOnly(){
+  if(lockHash){
+    const p=prompt('סיסמת הנעילה ליציאה ממצב צפייה:');
+    if(p===null) return;
+    const h=await sha256(p);
+    if(h!==lockHash){ alert('סיסמה שגויה.'); return; }
+  }else if(!confirm('לצאת ממצב צפייה ולאפשר עריכה?')) return;
+  viewOnly=false;
+  try{ LS.removeItem('bagrutViewOnly'); }catch(e){}
+  render();
+  toast('מצב עריכה');
+}
+/* ══════════ מעורבות חברתית ══════════
+   חובה על כל תלמידה, ומדווחת בסוף י״ב בארבע רמות. אינה ציון מספרי ואינה
+   נכנסת לממוצע. לפי החלטת המוסד כאן היא **תצוגה בלבד** ואינה משנה את
+   הזכאות — אבל היא מוצגת בכל מקום שבו היא רלוונטית, ואפשר לדווח עליה. */
+const SOCIAL=[
+  {v:1, t:'לא סיים',           cls:'b-bad',  ic:'✗'},
+  {v:2, t:'סיים',              cls:'b-ok',   ic:'✓'},
+  {v:3, t:'סיים בהצלחה',       cls:'b-pot',  ic:'★'},
+  {v:4, t:'סיים בהצטיינות',    cls:'b-exc',  ic:'⭐'}
+];
+const SOCIAL_MAP=Object.fromEntries(SOCIAL.map(x=>[x.v,x]));
+function socialOf(st){ const v=+((st||{}).social); return (v>=1&&v<=4)?v:null; }
+function socialTxt(st){ const v=socialOf(st); return v?SOCIAL_MAP[v].t:''; }
+function socialBadge(st){
+  const v=socialOf(st);
+  if(!v) return '<span class="badge b-miss" title="מעורבות חברתית — טרם דווח">טרם דווח</span>';
+  const o=SOCIAL_MAP[v];
+  return `<span class="badge ${o.cls}" title="מעורבות חברתית">${o.ic} ${esc(o.t)}</span>`;
+}
+function socialSelect(id,v){
+  return `<select class="socSel" onchange="setSocial('${id}',this.value)">
+    <option value="">— טרם דווח —</option>
+    ${SOCIAL.map(o=>`<option value="${o.v}" ${+v===o.v?'selected':''}>${o.v} · ${esc(o.t)}</option>`).join('')}
+  </select>`;
+}
+function setSocial(id,val){
+  if(roGuard()) return;
+  const st=(state.students||[]).find(s=>s.id===id); if(!st) return;
+  const v=+val;
+  const was=socialOf(st);
+  if(v>=1&&v<=4) st.social=v; else delete st.social;
+  pushCell('מעורבות חברתית · '+st.name,(function(prev){ return function(){
+    if(prev) st.social=prev; else delete st.social; }; })(was));
+  save(); refreshOpenViews(id);
+}
+function socialStats(studs){
+  const c={1:0,2:0,3:0,4:0,none:0};
+  (studs||[]).forEach(st=>{ const v=socialOf(st); if(v) c[v]++; else c.none++; });
+  return c;
+}
 /* ============ מודל המקצועות ============ */
 const I=(n,w)=>({n,t:'i',w});
 const E=(n,w,s)=>({n,t:'e',w,s}); // s = אחוז מגן
@@ -1721,6 +1842,7 @@ const GSTAT={r:{lbl:'ציון אמיתי — טרם דווח למשרד',cls:'g-
 function gstatOf(st,key){ return (st.gstat||{})[key]||''; }
 function gstatCls(st,key){ const s=gstatOf(st,key); return s?' '+GSTAT[s].cls:''; }
 function cycleGstat(id,key){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.gstat=st.gstat||{};
   const cur=st.gstat[key]||'';
@@ -1847,6 +1969,7 @@ const MUGBAR_PRESETS={
  'לימודי א"י':  [[50,'12362'],[30,'12281'],[20,'12241']]
 };
 function applyMugbarPreset(stId,sid,presetName){
+  if(roGuard()) return;
   if(!presetName) return;
   const st=state.students.find(s=>s.id===stId); if(!st) return;
   const p=MUGBAR_PRESETS[presetName]; if(!p) return;
@@ -1923,6 +2046,7 @@ function gradesOf(st,sim){
 function isSimKey(st,key){ return !!(st.simg&&st.simg[key]!==undefined); }
 function simCount(){ return state.students.reduce((a,s)=>a+(s.simg?Object.keys(s.simg).length:0),0); }
 function setGradeSim(id,key,val){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   calcOn=false;   // ההקלדה מבטלת את המחשבון הכבד — מפעילים אותו מחדש בלחיצה
   st.simg=st.simg||{};
@@ -1939,6 +2063,7 @@ function setGradeSim(id,key,val){
   else renderKeepScroll();
 }
 function clearSim(){
+  if(roGuard()) return;
   const n=simCount();
   if(!n){ toast('אין שינויי ניסוי'); return; }
   if(!confirm('למחוק את '+n+' שינויי הניסוי ולחזור לציונים האמיתיים?')) return;
@@ -1947,6 +2072,7 @@ function clearSim(){
   save(); render(); toast('שינויי הניסוי נמחקו — חזרנו לציונים האמיתיים');
 }
 function commitSim(){
+  if(roGuard()) return;
   const n=simCount();
   if(!n){ toast('אין שינויים בתרחיש'); return; }
   const who=state.students.filter(s=>s.simg&&Object.keys(s.simg).length);
@@ -1980,6 +2106,7 @@ function logoHtml(size){
 }
 function renderLogo(){ const s=document.getElementById('logoSlot'); if(s) s.innerHTML=logoHtml(54); }
 function uploadLogo(input){
+  if(roGuard()) return;
   const file=input.files[0]; if(!file) return;
   const reader=new FileReader();
   reader.onload=e=>{
@@ -2165,11 +2292,13 @@ function switchProfile(id){
   toast('עברת לסימולטור: '+profiles.find(p=>p.id===id).name);
 }
 function setProfileName(v){
+  if(roGuard()) return;
   const p=profiles.find(x=>x.id===currentProfileId); if(!p) return;
   if(!v||!v.trim()){ toast('נא להזין שם'); return; }
   p.name=v.trim(); delete p.unnamed; saveProfiles(); renderProfileBar(); render(); toast('שם הסימולטור: '+p.name);
 }
 function newProfile(){
+  if(roGuard()) return;
   const name=prompt('שם הסימולטור החדש:','');
   if(!name||!name.trim()) return;
   const nm=name.trim();
@@ -2191,6 +2320,7 @@ function renameProfile(){
   if(name.trim()){ p.name=name.trim(); delete p.unnamed; saveProfiles(); renderProfileBar(); render(); toast('השם עודכן'); }
 }
 function deleteProfile(){
+  if(roGuard()) return;
   if(profiles.length<=1){ toast('חייב להישאר לפחות סימולטור אחד'); return; }
   const p=profiles.find(x=>x.id===currentProfileId);
   const nSt=(state.students||[]).length;
@@ -2257,6 +2387,10 @@ function sanitizeState(out){
       const o=st[f]; if(!o||typeof o!=='object') { if(o!==undefined) st[f]={}; return; }
       Object.keys(o).forEach(k=>{ const n=clampNum(o[k],0,100); if(n===null) delete o[k]; else o[k]=n; });
     });
+    if(st.social!==undefined){
+      const sv=clampNum(st.social,1,4);
+      if(sv===null) delete st.social; else st.social=Math.round(sv);
+    }
     if(st.units&&typeof st.units==='object')
       Object.keys(st.units).forEach(k=>{ const n=clampNum(st.units[k],0,15); if(n===null) delete st.units[k]; else st.units[k]=Math.round(n); });
     if(st.ov&&typeof st.ov==='object')
@@ -2537,6 +2671,7 @@ function licBanner(){
 /* ============ מצב פשוט / מקצועי ============ */
 function isPro(){ return !!state.pro; }
 function togglePro(){
+  if(roGuard()) return;
   state.pro=!state.pro; save(); render();
   toast(state.pro?'מצב מקצועי — כל היכולות פתוחות':'מצב פשוט — מוצגות רק היכולות הבסיסיות');
 }
@@ -2860,6 +2995,7 @@ function openNote(id,key,label){
 }
 function closeNote(){ flushActive(); document.getElementById('ndModal').classList.remove('show'); refreshOpenViews(nd.id); }
 function saveNote(){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===nd.id); if(!st) return;
   const v=(document.getElementById('ndText')||{}).value||'';
   st.notes=st.notes||{};
@@ -2868,6 +3004,7 @@ function saveNote(){
   save(); closeNote(); refreshAfterEdit(st.id); toast(v.trim()?'ההערה נשמרה':'ההערה נמחקה');
 }
 function delNote(){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===nd.id); if(!st) return;
   if(st.notes) delete st.notes[nd.key];
   save(); closeNote(); refreshAfterEdit(st.id); toast('ההערה נמחקה');
@@ -2920,6 +3057,7 @@ function dupBanner(){
   </div>`;
 }
 function renameDup(id){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   const v=prompt('שם חדש לתלמידה:',st.name);
   if(v===null||!v.trim()) return;
@@ -2976,6 +3114,7 @@ function cellSnap(id,field,key,label){
     if(had) s[field][key]=prev; else delete s[field][key]; };
 }
 function doCellUndo(){
+  if(roGuard()) return;
   const u=cellUndo.pop();
   if(!u){ toast('אין עריכת ציון לביטול'); renderCellUndo(); return; }
   try{ u.fn(); }catch(e){ toast('הביטול נכשל'); renderCellUndo(); return; }
@@ -3013,6 +3152,7 @@ function autoSnapshot(){
   }catch(e){}
 }
 function restoreSnap(i){
+  if(roGuard()) return;
   const snaps=loadSnaps(); const s=snaps[i]; if(!s) return;
   if(!confirm(`לשחזר את נקודת השמירה מ-${new Date(s.at).toLocaleString('he-IL')}?\n(${s.n} תלמידות)\n\nהמצב הנוכחי יישמר קודם כנקודת ביטול.`)) return;
   pushUndo('שחזור נקודת שמירה');
@@ -3081,6 +3221,7 @@ function exportLog(){
     .catch(e=>toast('הייצוא נכשל: '+(e&&e.message||'שגיאה')));
 }
 function doUndo(){
+  if(roGuard()) return;
   const u=undoStack.pop();
   if(!u){ toast('אין פעולה לביטול'); return; }
   if(!confirm(`לבטל את הפעולה "${u.label}"?\n(${new Date(u.at).toLocaleTimeString('he-IL')})\nהמצב יחזור לרגע שלפניה.`)){ undoStack.push(u); return; }
@@ -3159,6 +3300,7 @@ function renderTestsDlg(){
 }
 function tdArr(){ const st=state.students.find(s=>s.id===td.id); return st?testsOf(st,td.sid):[]; }
 function tdSet(i,f,v){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===td.id); if(!st) return;
   const arr=testsOf(st,td.sid); if(!arr[i]) return;
   if(f==='g'){ const g=+v; if(isNaN(g)) return; arr[i].g=Math.max(0,Math.min(100,g)); }
@@ -3167,17 +3309,20 @@ function tdSet(i,f,v){
   saveTests(st,td.sid,arr); save(); renderTestsDlg();
 }
 function tdDel(i){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===td.id); if(!st) return;
   const arr=testsOf(st,td.sid); arr.splice(i,1);
   saveTests(st,td.sid,arr); save(); renderTestsDlg();
 }
 function tdAdd(name){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===td.id); if(!st) return;
   const arr=testsOf(st,td.sid);
   arr.push({n:name,g:0,w:name==='בוחן'?1:2});
   saveTests(st,td.sid,arr); save(); renderTestsDlg();
 }
 function setTest(id,sid,val){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.tests=st.tests||{};
   const undoFn=cellSnap(id,'tests',sid);
@@ -4035,7 +4180,10 @@ function render(){
     try{ m.innerHTML=tabErrHtml(currentTab,err); }catch(e2){ m.innerHTML='<div class="card">שגיאה בהצגת המסך.</div>'; }
     try{ console.error('render('+currentTab+')',err); }catch(e3){}
   }
+  try{ if(viewOnly&&m&&m.insertAdjacentHTML) m.insertAdjacentHTML('afterbegin',roBanner()); }catch(e){}
   try{ mobileReflow(m); }catch(e){}
+  try{ applyReadOnly(); }catch(e){}
+  try{ document.body.classList.toggle('ro',!!viewOnly); }catch(e){}
   try{ renderSaveInd(); renderNag(); renderHeaderCenter(); renderUndoAll(); renderLic(); renderSyncInd(); animateCounters(); }catch(e){}
 }
 /* ══ סידור מחדש לטלפון ══
@@ -4433,9 +4581,16 @@ function allStudentsTable(){
     [`<button class="btn" onclick="document.getElementById('xlsxFile').click()">${ic('up',15)}ייבוא מאקסל</button>`]);
   const rows=state.students.map(st=>({st,r:calcStudent(st)})).sort((a,b)=>a.st.cls.localeCompare(b.st.cls)||a.st.name.localeCompare(b.st.name));
   const nTz=state.students.filter(s=>s.tz).length;
-  return `${tzBar(nTz)}<table class="tbl grades"><thead><tr><th>שם</th><th class="cCls">כיתה</th>
+  const sc=socialStats(state.students);
+  const socBar=`<div class="toolbar" style="margin-bottom:9px; flex-wrap:wrap;">
+    <span class="eLbl">${ic('users2',13)}מעורבות חברתית</span>
+    ${SOCIAL.map(o=>`<span class="badge ${o.cls}">${o.ic} ${esc(o.t)}: <b>${sc[o.v]}</b></span>`).join('')}
+    <span class="badge b-miss">טרם דווח: <b>${sc.none}</b></span>
+    <span class="note">חובה על כל תלמידה · מדווח בסוף י״ב · אינו נכנס לממוצע ואינו משנה את חישוב הזכאות</span>
+  </div>`;
+  return `${tzBar(nTz)}${socBar}<table class="tbl grades"><thead><tr><th>שם</th><th class="cCls">כיתה</th>
     ${tzCol?`<th class="cTz">תעודת זהות</th>`:''}
-    <th>ממוצע</th><th>יח"ל</th><th>מעכבים</th><th>חסרים</th><th>סטטוס</th><th></th></tr></thead><tbody>
+    <th>ממוצע</th><th>יח"ל</th><th>מעורבות חברתית</th><th>מעכבים</th><th>חסרים</th><th>סטטוס</th><th></th></tr></thead><tbody>
   ${rows.map(x=>`<tr>
     <td><span class="stName" onclick="openStudent('${x.st.id}')">${avatar(x.st.name)}<span class="name-link">${esc(x.st.name)}</span></span></td>
     <td class="cCls"><select onchange="setStudentClass('${x.st.id}',this.value)">${state.classes.map(c=>`<option ${x.st.cls===c?'selected':''}>${esc(c)}</option>`).join('')}</select></td>
@@ -4444,6 +4599,7 @@ function allStudentsTable(){
         onchange="setTz(${jsq(x.st.id)},this.value)" onkeydown="tzKey(event)"></td>`:''}
     <td class="${gradeClass(x.r.avg)}">${fmt(x.r.avg)}</td>
     <td>${x.r.totalUnits}</td>
+    <td>${socialSelect(x.st.id,x.st.social)}</td>
     <td>${x.r.blockers.length?`<span class="badge b-bad">${x.r.blockers.map(s=>s.name).join(', ')}</span>`:'—'}</td>
     <td>${x.r.missing.length||'—'}</td>
     <td class="status-cell"><span class="badge ${x.r.cls}">${x.r.status}</span></td>
@@ -4452,6 +4608,7 @@ function allStudentsTable(){
   </tr>`).join('')}</tbody></table>`;
 }
 function addStudent(){
+  if(roGuard()) return;
   const name=document.getElementById('newName').value.trim();
   const sel=document.getElementById('newCls');
   const cls=sel?sel.value:'';
@@ -4463,6 +4620,7 @@ function addStudent(){
   save(); render(); toast('נוספה: '+name);
 }
 function bulkAdd(){
+  if(roGuard()) return;
   const sel=document.getElementById('newCls');
   const cls=sel?sel.value:'';
   if(!cls){toast('קודם צרי כיתה — בחלונית "ניהול כיתות" משמאל');return;}
@@ -4475,6 +4633,7 @@ function bulkAdd(){
   save(); render(); toast(`נוספו ${names.length} תלמידות ל${cls}`);
 }
 function addClass(){
+  if(roGuard()) return;
   const c=document.getElementById('newClsName').value.trim();
   if(!c||state.classes.includes(c)){toast('שם כיתה חסר או קיים');return;}
   state.classes.push(c);
@@ -4484,6 +4643,7 @@ function addClass(){
   save(); render(); toast('נוצרה כיתה: '+c);
 }
 function delClass(c){
+  if(roGuard()) return;
   const cnt=state.students.filter(s=>s.cls===c).length;
   if(!confirm(`למחוק את כיתה ${c}${cnt?` יחד עם ${cnt} תלמידותיה`:''}?`)) return;
   pushUndo('מחיקת כיתה — '+c);
@@ -4492,12 +4652,14 @@ function delClass(c){
   save(); render();
 }
 function setStudentClass(id,val){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.cls=val; save();
   const modal=document.getElementById('studentModal');
   if(modal.classList.contains('show')) openStudent(id); else renderKeepScroll();
 }
 function delStudent(id){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id);
   if(!confirm(`למחוק את ${st.name}?`)) return;
   pushUndo('מחיקת תלמידה — '+st.name);
@@ -4533,6 +4695,8 @@ function openStudent(id,mode){
         <select onchange="setStudentClass('${st.id}',this.value)">${state.classes.map(c=>`<option ${st.cls===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
         <span class="badge ${rShow.cls}">${rShow.status}</span>
         ${isSim&&rReal.status!==rShow.status?`<span class="schip">${ic('arrowLeft',12)}אמיתי: ${rReal.status}</span>`:''}
+        ${isSim?'':`<span class="socWrap" title="מעורבות חברתית — חובה, מדווח בסוף י״ב">
+          ${ic('users2',12)}${socialSelect(st.id,st.social)}</span>`}
       </div>
     </div>
     <div class="stStats">
@@ -4665,12 +4829,14 @@ function studentSubjEditor(st,subj){
   <div class="subj-body">${body}</div></div>`;
 }
 function addBonus(id,sid,i){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.shw=st.shw||{}; st.shw[sid+'.'+i]=1;
   if(st.hid) delete st.hid[sid+'.'+i];
   save(); refreshOpenViews(id); toast('נוספה עבודה נוספת — הזיני משקל וציון');
 }
 function hideComp(id,key,w,name){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   if(w>0){
     if(!confirm(`לרכיב "${name}" יש משקל ${w}% בציון.\n\nהסרה תאפס את משקלו — האחוזים יתחלקו מחדש בין שאר הרכיבים והציון עשוי להשתנות.\n\nלהסיר?`)) return;
@@ -4682,6 +4848,7 @@ function hideComp(id,key,w,name){
   save(); refreshOpenViews(id); toast('הרכיב הוסר — אפשר להחזירו מהשורה התחתונה במקצוע');
 }
 function showComp(id,key){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   if(st.hid) delete st.hid[key];
   // אם המשקל אופס בעת ההסרה — מחזירים אותו לברירת המחדל
@@ -4694,6 +4861,7 @@ function showComp(id,key){
 }
 function isHidden(st,key){ return !!((st.hid||{})[key]); }
 function setOv(id,key,field,val){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.ov=st.ov||{};
   const ovv=numOr(val,0,100,undefined);
@@ -4702,17 +4870,20 @@ function setOv(id,key,field,val){
   save(); refreshOpenViews(id);
 }
 function resetOv(id,sid){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st||!st.ov) return;
   Object.keys(st.ov).filter(k=>k.startsWith(sid+'.')).forEach(k=>delete st.ov[k]);
   save(); refreshOpenViews(id);
 }
 function setCode(id,key,val){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.codes=st.codes||{};
   if(!val.trim()) delete st.codes[key]; else st.codes[key]=val.trim();
   save(); refreshAfterEdit(id);
 }
 function setGrade(id,key,val){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.grades=st.grades||{};
   const prev=st.grades[key];
@@ -4749,6 +4920,7 @@ function tzBar(nTz){
   </div>`;
 }
 function setTz(id,val){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   const d=String(val||'').replace(/[^0-9]/g,'').slice(0,9);
   if(d) st.tz=d; else delete st.tz;
@@ -4762,6 +4934,7 @@ function moeChip(st,key){
     ${ic('shield',11)}משרד ${m.f}</span>`;
 }
 function setUnits(id,sid,val){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.units=st.units||{}; const pv=st.units[sid];
   const uv=numOr(val,0,10,undefined);
@@ -4777,6 +4950,7 @@ function setUnits(id,sid,val){
   else renderKeepScroll();
 }
 function setMugbarName(id,sid,val){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===id); if(!st) return;
   st.mugbarNames=st.mugbarNames||{}; st.mugbarNames[sid]=val.trim();
   save(); refreshAfterEdit(id);
@@ -4976,6 +5150,7 @@ function setCodePick(stId,key,v){
   renderKeepScroll();
 }
 function applyCodeToClass(stId,key){
+  if(roGuard()) return;
   const st=state.students.find(s=>s.id===stId); if(!st) return;
   const v=((st.codes||{})[key]||'');
   if(!v){ toast('קודם בחרי סמל'); return; }
@@ -5007,6 +5182,7 @@ function colCode(subj,i,studs){
   </select>`;
 }
 function setColCode(sid,i,v){
+  if(roGuard()) return;
   if(v==='__mix') return;
   const subj=SUBJ_MAP[sid]; if(!subj) return;
   const key=sid+'.'+i;
@@ -5299,6 +5475,7 @@ function scanDead(){
   return out;
 }
 function deadDrop(stId,keys){
+  if(roGuard()) return;
   const st=(state.students||[]).find(x=>x.id===stId); if(!st) return;
   const ks=String(keys).split(',');
   if(!confirm('למחוק '+ks.length+' ציונים של '+st.name+'?\n\n'+
@@ -5308,6 +5485,7 @@ function deadDrop(stId,keys){
   save(); render(); toast(ks.length+' ציונים נמחקו');
 }
 function deadUnOv(stId,key){
+  if(roGuard()) return;
   const st=(state.students||[]).find(x=>x.id===stId); if(!st) return;
   const po=(st.ov||{})[key]; if(!po) return;
   pushUndo('ביטול התאמה אישית · '+st.name);
@@ -5602,6 +5780,7 @@ function giParseFile(input){
   rd.readAsArrayBuffer(file);
 }
 function giApply(){
+  if(roGuard()) return;
   const subjP=SUBJ_MAP[gi.subj]||SUBJECTS[0];
   const isTestP=gi.comp==='T';
   const compsP=giCompOptions();
@@ -5654,6 +5833,7 @@ function giApply(){
 
 /* ============ צביעה גורפת בלשונית ההזנה ============ */
 function applyEntryColor(){
+  if(roGuard()) return;
   const subj=SUBJ_MAP[entrySubj]||SUBJECTS[0];
   const scope=(document.getElementById('ecScope')||{}).value||'all';
   const color=(document.getElementById('ecColor')||{}).value||'';
@@ -6473,11 +6653,124 @@ function renderReports(m){
   </div>
   ${nRep?`<div class="repNav">
     <span class="eLbl">${ic('book',13)}פרקים</span>
-    ${[['rSum','סיכום'],['rStud','תלמידות'],['rExc','מצטיינות'],['rPot','פוטנציאל'],['rBad','דורשות טיפול'],['rNotes','הערות'],['rSubj','ממוצע לפי מקצוע']]
+    ${[['rSum','סיכום'],['rEdu','תמונה חינוכית'],['rStud','תלמידות'],['rExc','מצטיינות'],['rPot','פוטנציאל'],['rBad','דורשות טיפול'],['rNotes','הערות'],['rSubj','ממוצע לפי מקצוע']]
       .map(([id,nm])=>`<button class="btn sec sm" onclick="goSec('${id}')">${nm}</button>`).join('')}
   </div>`:''}
   ${fltBar(null,filteredStudents(reportClass).length,repStuds(reportClass).length)}
   <div class="card" id="reportBody">${buildReportHtml(reportClass)}</div>`;
+}
+/* ══════════ תמונה חינוכית ══════════
+   פילוח של השכבה לפי חתך שהרכזת בוחרת — כיתה, רמת יח"ל במקצוע, סטטוס,
+   מעורבות חברתית או טווח ממוצע. לכל קבוצה: כמה תלמידות, ממוצע, וכמה
+   מהן זכאיות / מצטיינות / בסיכון. זה הדף שמגיע לישיבת ההנהלה. */
+let eduBy='cls', eduSubj='math';
+function eduDims(){
+  return [
+    {k:'cls',   t:'כיתה'},
+    {k:'units', t:'רמת יח"ל במקצוע'},
+    {k:'status',t:'סטטוס'},
+    {k:'social',t:'מעורבות חברתית'},
+    {k:'band',  t:'טווח ממוצע'}
+  ];
+}
+function eduKey(x,GM){
+  const st=x.st, r=x.r;
+  switch(eduBy){
+    case 'cls':    return st.cls||'ללא כיתה';
+    case 'units':  { const sj=SUBJ_MAP[eduSubj]; if(!sj) return '—';
+                     const u=getUnits(st,sj); return u?(u+' יח"ל'):'לא לומדת'; }
+    /* הסטטוס המלא כולל אחוז כיסוי ומספר מעכבים ("בדרך להצטיינות · מוקדם (31%)"),
+       ולכן פילוח לפיו התפצל לשמונה קבוצות. כאן מקבצים לפי הקטגוריה. */
+    case 'status': return GM.is(r,'risk')?GM.lbl('risk')
+                        :GM.is(r,'exc') ?GM.lbl('exc')
+                        :GM.is(r,'pot') ?GM.lbl('pot')
+                        :GM.is(r,'elig')?GM.lbl('elig')
+                        :(GM.score(r)===null||GM.score(r)===undefined)?'אין ציונים':'לא עומדת בתנאים';
+    case 'social': return socialTxt(st)||'טרם דווח';
+    case 'band':   { const v=GM.score(r);
+                     if(v===null||v===undefined) return 'אין ציונים';
+                     if(v<55) return 'מתחת ל-55'; if(v<65) return '55–64';
+                     if(v<75) return '65–74'; if(v<85) return '75–84';
+                     if(v<90) return '85–89'; return '90 ומעלה'; }
+  }
+  return '—';
+}
+function eduRows(results){
+  const GM=gradeMode(results);
+  const g={};
+  results.forEach(x=>{ const k=eduKey(x,GM); (g[k]=g[k]||[]).push(x); });
+  const rows=Object.keys(g).map(k=>{
+    const list=g[k];
+    const sc=list.map(x=>GM.score(x.r)).filter(v=>v!==null&&v!==undefined);
+    return {k, n:list.length,
+      avg:avgOf(sc),
+      elig:list.filter(x=>GM.is(x.r,'elig')).length,
+      exc: list.filter(x=>GM.is(x.r,'exc')).length,
+      pot: list.filter(x=>GM.is(x.r,'pot')).length,
+      risk:list.filter(x=>GM.is(x.r,'risk')).length,
+      soc: socialStats(list.map(x=>x.st))};
+  });
+  const ord=['מתחת ל-55','55–64','65–74','75–84','85–89','90 ומעלה','אין ציונים'];
+  const ordS=[GM.lbl('exc'),GM.lbl('pot'),GM.lbl('elig'),'לא עומדת בתנאים',GM.lbl('risk'),'אין ציונים'];
+  const ordSoc=['סיים בהצטיינות','סיים בהצלחה','סיים','לא סיים','טרם דווח'];
+  if(eduBy==='band') rows.sort((a,b)=>ord.indexOf(a.k)-ord.indexOf(b.k));
+  else if(eduBy==='status') rows.sort((a,b)=>ordS.indexOf(a.k)-ordS.indexOf(b.k));
+  else if(eduBy==='social') rows.sort((a,b)=>ordSoc.indexOf(a.k)-ordSoc.indexOf(b.k));
+  else if(eduBy==='units') rows.sort((a,b)=>(parseFloat(b.k)||-1)-(parseFloat(a.k)||-1));
+  else rows.sort((a,b)=>b.n-a.n||String(a.k).localeCompare(String(b.k),'he'));
+  return {rows,GM};
+}
+function eduPicture(results){
+  if(!results.length) return '';
+  const {rows,GM}=eduRows(results);
+  const tot=results.length;
+  const pct=n=>tot?Math.round(n/tot*100):0;
+  return `<h3 class="sec" id="rEdu">${ic('chart',15)}תמונה חינוכית</h3>
+  <div class="toolbar" style="margin-bottom:9px;">
+    <span class="eLbl">${ic('layers',13)}חתך</span>
+    <select onchange="eduBy=this.value;renderKeepScroll()">
+      ${eduDims().map(d=>`<option value="${d.k}" ${eduBy===d.k?'selected':''}>${esc(d.t)}</option>`).join('')}
+    </select>
+    ${eduBy==='units'?`<select onchange="eduSubj=this.value;renderKeepScroll()">
+      ${SUBJECTS.filter(x=>!x.internalOnly).map(x=>`<option value="${x.id}" ${eduSubj===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}
+    </select>`:''}
+    <button class="btn sec sm" onclick="eduCopy()">${ic('clipboard',13)}העתקה</button>
+    <span class="note">${GM.partial?'המספרים הם צפי לפי מה שהוזן':'לפי הציונים הסופיים'}</span>
+  </div>
+  <div class="scroll" style="max-height:none;">
+  <table class="tbl"><thead><tr>
+    <th>${esc((eduDims().find(d=>d.k===eduBy)||{}).t||'')}</th>
+    <th>תלמידות</th><th>ממוצע</th>
+    <th>${GM.lbl('elig')}</th><th>${GM.lbl('exc')}</th><th>${GM.lbl('pot')}</th><th>${GM.lbl('risk')}</th>
+    ${eduBy==='social'?'':'<th>מעורבות — טרם דווח</th>'}
+  </tr></thead><tbody>
+  ${rows.map(r=>`<tr>
+    <td style="font-weight:700;">${esc(r.k)}</td>
+    <td><b>${r.n}</b> <span class="note">(${pct(r.n)}%)</span></td>
+    <td class="${gradeClass(r.avg)}" style="font-weight:800;">${fmt(r.avg)}</td>
+    <td>${r.elig}</td><td>${r.exc}</td><td>${r.pot}</td>
+    <td class="${r.risk?'g-red':''}">${r.risk||'—'}</td>
+    ${eduBy==='social'?'':`<td>${r.soc.none||'—'}</td>`}
+  </tr>`).join('')}
+  <tr style="background:#f8fafc; font-weight:800;">
+    <td>סה"כ</td><td>${tot}</td>
+    <td class="${gradeClass(GM.avg)}">${fmt(GM.avg)}</td>
+    <td>${GM.elig}</td><td>${GM.exc}</td><td>${GM.pot}</td><td>${GM.risk}</td>
+    ${eduBy==='social'?'':`<td>${socialStats(results.map(x=>x.st)).none}</td>`}
+  </tr>
+  </tbody></table></div>`;
+}
+function eduCopy(){
+  const studs=repStuds(reportClass);
+  const {rows,GM}=eduRows(studs.map(st=>({st,r:calcStudent(st)})));
+  const dim=(eduDims().find(d=>d.k===eduBy)||{}).t||'';
+  let t='תמונה חינוכית · '+dim+(eduBy==='units'?' ('+((SUBJ_MAP[eduSubj]||{}).name||'')+')':'')+
+        ' · '+(reportClass||'כל השכבה')+'\n';
+  t+=[dim,'תלמידות','ממוצע',GM.lbl('elig'),GM.lbl('exc'),GM.lbl('pot'),GM.lbl('risk')].join('\t')+'\n';
+  rows.forEach(r=>{ t+=[r.k,r.n,r.avg===null?'—':r.avg,r.elig,r.exc,r.pot,r.risk].join('\t')+'\n'; });
+  t+=['סה"כ',studs.length,GM.avg===null?'—':GM.avg,GM.elig,GM.exc,GM.pot,GM.risk].join('\t')+'\n';
+  try{ navigator.clipboard.writeText(gx(t)).then(()=>toast('התמונה החינוכית הועתקה — אפשר להדביק באקסל')); }
+  catch(e){ toast('ההעתקה נכשלה'); }
 }
 function buildReportHtml(cls){
   const studs=repStuds(cls);
@@ -6518,14 +6811,16 @@ function buildReportHtml(cls){
     <div class="kpi k6"><div class="n">${avgAll===null?'—':avgAll}</div><div class="t">ממוצע${GM.partial?' צפי':''}</div></div>
   </div>
   ${eligNoteHtml()}
+  ${eduPicture(results)}
   <h3 class="sec" id="rStud">טבלת תלמידות מפורטת</h3>
   <div class="scroll" style="max-height:none;">
-  <table class="tbl grades"><thead><tr><th>שם</th><th class="cCls">כיתה</th>${SUBJECTS.map(s=>`<th>${esc(s.name)}</th>`).join('')}<th>ממוצע</th><th>סטטוס</th></tr></thead><tbody>
+  <table class="tbl grades"><thead><tr><th>שם</th><th class="cCls">כיתה</th>${SUBJECTS.map(s=>`<th>${esc(s.name)}</th>`).join('')}<th>ממוצע</th><th>מעורבות</th><th>סטטוס</th></tr></thead><tbody>
   ${results.map(x=>`<tr><td style="font-weight:700;">${esc(x.st.name)}</td><td class="cCls">${esc(x.st.cls)}</td>
     ${SUBJECTS.map(s=>{const r=x.r.per[s.id]; if(!r||!r.active)return '<td style="color:#cbd5e1;">—</td>';
       const nt=subjNote(x.st,s.id);
       return `<td ${nt?'class="hasNote"':''}>${scoreCellReport(r)}${nt?' '+tip(nt,'<span style="color:#f59e0b; font-size:12px;">📝</span>'):''}</td>`;}).join('')}
     <td class="${gradeClass(GM.score(x.r))}" style="font-weight:800;">${fmt(GM.score(x.r))}${(!x.r.complete&&GM.score(x.r)!==null)?'<sup style="opacity:.55;">*</sup>':''}</td>
+    <td>${socialBadge(x.st)}</td>
     <td><span class="badge ${GM.cls(x.r)}">${GM.status(x.r)}</span></td></tr>`).join('')}
   </tbody></table></div>
   ${(()=>{const np=results.reduce((a,x)=>a+SUBJECTS.filter(s=>{const r=x.r.per[s.id]; return r&&r.active&&r.final===null&&r.partial!==null;}).length,0);
@@ -6850,6 +7145,25 @@ function renderSettings(m){
      ${SUBJECTS.map(subj=>settingsSubj(subj)).join('')}
      <button class="btn warn" onclick="if(confirm('לאפס את כל מבנה המקצועות — שמות, משקלים וסמלים — לברירת המחדל?')){state.custom={};clearCompCache();save();render();}">↩️ איפוס לברירות מחדל</button>`)}
 
+  ${sCard('ro','lock','מצב צפייה — לצוות שרק צריך לראות',
+    'מחנכת או סגנית רואה את הציונים, הדוחות והסימולציה — בלי יכולת לשנות דבר.',
+    viewOnly?'<span class="pill" style="background:#eef2ff; color:#3730a3;">פעיל</span>':'',
+    `<div class="toolbar">
+       ${viewOnly
+         ? `<button class="btn ok" onclick="exitViewOnly()">${ic('key',15)}יציאה ממצב צפייה</button>`
+         : `<button class="btn" onclick="enterViewOnly()">${ic('lock',15)}הפעלת מצב צפייה</button>`}
+     </div>
+     <div class="note" style="margin-top:7px; line-height:1.85;">
+       <b>מה חסום:</b> הזנת ציונים, הוספה ומחיקה של תלמידות, שינוי יח"ל והערות,
+       מבנה המקצועות, ייבוא, שחזור וביטול פעולות.<br>
+       <b>מה פתוח:</b> כל המסכים, הדוחות, התמונה החינוכית, הסימולציה לצפייה, וייצוא לאקסל.<br>
+       <b>ליציאה נדרשת סיסמת הנעילה</b>${lockHash?'':' — <b class="g-red">וטרם הוגדרה סיסמה</b>, ולכן כרגע אפשר לצאת בלחיצה. מומלץ להגדיר נעילה קודם.'}
+     </div>
+     <div class="note" style="margin-top:6px; padding:7px 10px; background:#fffbeb; border:1px solid #fde68a; border-radius:8px;">
+       ⚠️ <b>חשוב שתדעי:</b> זו הגנה מפני שינוי בטעות, לא אבטחה. הנתונים יושבים בדפדפן של אותו מחשב,
+       ומי שמבין בכלי דפדפן יכול לעקוף. אם המטרה היא שלא יראו ציונים בכלל — אל תיתני גישה למחשב.
+     </div>`)}
+
   ${sGrp('warn','אזור מסוכן')}
   <div class="dzCard">
     <div class="dzHead">${ic('warn',16)}<span>פעולות שאינן ניתנות לביטול</span></div>
@@ -6862,6 +7176,7 @@ function renderSettings(m){
 }
 
 function T_set(k,v){
+  if(roGuard()) return;
   const lim={pass:[0,100],excel:[0,100],potential:[0,100],gap:[0,100],minUnits:[0,60]}[k]||[0,100];
   const n=numOr(v,lim[0],lim[1],undefined);
   if(n===undefined){ toast('יש להזין מספר בין '+lim[0]+' ל-'+lim[1]); renderKeepScroll(); return; }
@@ -6910,6 +7225,7 @@ function bulkRows(){
    הבהרה חשובה: התאמה אישית של תלמידה *גוברת* על ברירת המחדל — ולכן שינוי
    ברירת מחדל לבדו לא ישנה דבר אצל מי שיש לה התאמה. זה מה שנראה כמו "לא מתעדכן". */
 function bulkApply(i,mode){
+  if(roGuard()) return;
   mode=mode||'def';
   const subj=SUBJ_MAP[bulkSubj]||SUBJECTS[0];
   const key=subj.id+'.'+i;
@@ -6945,6 +7261,7 @@ function bulkApply(i,mode){
   toast(mode==='force'?`הוחל בכפייה — כולל ${nOv} התאמות שנמחקו`:'ברירת המחדל עודכנה');
 }
 function bulkCodesAll(){
+  if(roGuard()) return;
   const subj=SUBJ_MAP[bulkSubj]||SUBJECTS[0];
   const u=subj.opts[subj.opts.length-1];
   const comps=getComps(subj,u);
@@ -6962,6 +7279,7 @@ function bulkCodesAll(){
   save(); render(); toast(`הוחלו ${picks.length} סמלים על ${targets.length} תלמידות`);
 }
 function bulkClear(){
+  if(roGuard()) return;
   const subj=SUBJ_MAP[bulkSubj]||SUBJECTS[0];
   const targets=bulkTargets();
   const n=targets.filter(s=>Object.keys(s.ov||{}).some(k=>k.indexOf(subj.id+'.')===0)).length;
@@ -7153,6 +7471,7 @@ function settingsSubj(subj){
 /* יואב ביקש את הכפתור הזה פעמיים. הוא אינו "שומר" — השמירה כבר קרתה — אבל
    הוא נותן את מה שבאמת חסר: אישור מפורש שהמבנה תקין, במקום אמון עיוור. */
 function saveSubjStruct(sid){
+  if(roGuard()) return;
   const sj=SUBJ_MAP[sid]||{name:sid};
   flushWeights(sid); repaintTotals(sid);   // מה שכתוב בשדות הוא מה שנבדק
   const bad=badLevels(sid);
@@ -7171,6 +7490,7 @@ function saveSubjStruct(sid){
    כל מקצוע מובנה דרש עד כה עריכת קוד. כאן זה הופך להגדרה של המוסד:
    שם, רמות יח"ל, ומבנה רכיבים חופשי — בדיוק כמו אמנות חזותית או תנ"ך. */
 function addXSubj(){
+  if(roGuard()) return;
   const nm=prompt('שם המקצוע החדש\n(למשל: ביולוגיה, פיזיקה, מדעי המחשב)','');
   if(nm===null) return;
   const name=String(nm).trim().slice(0,40);
@@ -7187,6 +7507,7 @@ function addXSubj(){
 }
 function xSubj(sid){ return (state.extraSubjects||[]).find(x=>x.id===sid)||null; }
 function setXSubjName(sid,val){
+  if(roGuard()) return;
   const x=xSubj(sid); if(!x) return;
   const nm=String(val||'').trim().slice(0,40);
   if(!nm){ toast('צריך שם למקצוע'); renderKeepScroll(); return; }
@@ -7195,6 +7516,7 @@ function setXSubjName(sid,val){
   toast('המקצוע נקרא עכשיו "'+nm+'"');
 }
 function setXSubjOpts(sid,val){
+  if(roGuard()) return;
   const x=xSubj(sid); if(!x) return;
   let o=String(val||'').split(/[^0-9]+/).map(v=>+v).filter(v=>v>0&&v<=15);
   o=[...new Set(o)].sort((a,b)=>a-b);
@@ -7204,6 +7526,7 @@ function setXSubjOpts(sid,val){
   toast('רמות היח"ל: '+o.join(', '));
 }
 function setXSubjInternal(sid,on){
+  if(roGuard()) return;
   const x=xSubj(sid); if(!x) return;
   x.internalOnly=!!on; rebuildSubjects(); save(); render();
   toast(on?'המקצוע סומן כפנימי — לא נכלל בממוצע ובזכאות':'המקצוע נכלל בממוצע ובזכאות');
@@ -7228,6 +7551,7 @@ function shiftIdxKeys(obj,sid,rm){
   return n;
 }
 function addXComp(sid){
+  if(roGuard()) return;
   const x=xSubj(sid); if(!x) return;
   if(x.comps.length>=12){ alert('מקסימום 12 רכיבים למקצוע.'); return; }
   x.comps.push({n:'רכיב חדש',t:'i',w:0});
@@ -7235,6 +7559,7 @@ function addXComp(sid){
   toast('נוסף רכיב · הגדירי לו שם ומשקל (סה"כ המשקלים צריך להיות 100)');
 }
 function delXComp(sid,i){
+  if(roGuard()) return;
   const x=xSubj(sid); if(!x||i<0||i>=x.comps.length) return;
   const nm=x.comps[i].n||('רכיב '+(i+1));
   // כמה ציונים אמיתיים ייעלמו? נאמר את המספר לפני השאלה, לא אחריה
@@ -7265,6 +7590,7 @@ function delXComp(sid,i){
   toast('הרכיב נמחק'+(nG?' · '+nG+' ציונים הוסרו':''));
 }
 function setXCompType(sid,i,t){
+  if(roGuard()) return;
   const x=xSubj(sid); if(!x||!x.comps[i]) return;
   x.comps[i].t=(t==='e')?'e':'i';
   if(x.comps[i].t==='e'&&(x.comps[i].s===undefined||x.comps[i].s===null)) x.comps[i].s=30;
@@ -7272,6 +7598,7 @@ function setXCompType(sid,i,t){
   toast(t==='e'?'הרכיב הוא בחינה חיצונית — מגן + בחינה':'הרכיב הוא הערכה פנימית — ציון אחד');
 }
 function delXSubj(sid){
+  if(roGuard()) return;
   const x=xSubj(sid); if(!x) return;
   let nG=0, nSt=0;
   state.students.forEach(st=>{
@@ -7301,6 +7628,7 @@ function delXSubj(sid){
    בקוד, וה"סמל הגורף" כתב את עצמו לתלמידות הקיימות בלבד — תלמידה שנוספה
    למחרת לא קיבלה אותו. כאן שניהם הופכים לברירת מחדל אמיתית של המוסד. */
 function setCompName(sid,u,i,val){
+  if(roGuard()) return;
   const key=sid+'.'+u+'.'+i;
   const nm=String(val||'').trim().slice(0,40);
   const subj=SUBJ_MAP[sid]; if(!subj) return;
@@ -7321,6 +7649,7 @@ function setCompName(sid,u,i,val){
   toast(nm&&nm!==base?('הרכיב נקרא עכשיו "'+nm+'"'):'השם חזר לברירת המחדל');
 }
 function setCompCode(sid,u,i,val){
+  if(roGuard()) return;
   const key=sid+'.'+u+'.'+i;
   const code=String(val||'').replace(/[^0-9\/]/g,'').slice(0,12);
   state.custom[key]=state.custom[key]||{};
@@ -7367,6 +7696,7 @@ function applyCompDefaults(st){
   return st;
 }
 function setCustom(sid,u,i,field,val){
+  if(roGuard()) return;
   const key=sid+'.'+u+'.'+i;
   const cv=numOr(val,0,100,undefined);
   if(cv===undefined){ toast('יש להזין מספר בין 0 ל-100'); return; }
@@ -7529,6 +7859,7 @@ function exportExcel(cls){
     row[GX.partial?'ממוצע צפי':'ממוצע משוקלל']=GX.score(r)??'';
     if(GX.partial) row['כיסוי %']=r.coverage||0;
     row['סה"כ יח"ל']=r.totalUnits;
+    row['מעורבות חברתית']=socialTxt(st)||'טרם דווח';
     row['מעכבים']=(GX.partial?(r.projBlockers||[]):r.blockers).map(s=>s.name).join(', ');
     row['סטטוס']=GX.status(r);
     return row;
@@ -7542,6 +7873,7 @@ function exportExcel(cls){
     const row={'שם':st.name,'כיתה':st.cls};
     // בלי זה גיבוי לאקסל ושחזור ממנו מאבדים את כל תעודות הזהות
     if(st.tz) row['תעודת זהות']=String(st.tz);
+    if(socialOf(st)) row['מעורבות חברתית']=socialOf(st)+' · '+socialTxt(st);
     SUBJECTS.forEach(subj=>{
       const sn=noteOf(st,subj.id); if(sn) row[subj.name+' - הערה כללית']=sn;
       /* הייצוא כתב יח"ל רק למקצוע עם כמה רמות לבחירה. לשון שבוטלה במפורש
@@ -8065,6 +8397,7 @@ function parseSimulatorWorkbook(wb){
   return out;
 }
 function importSimulator(wb){
+  if(roGuard()) return;
   const parsed=parseSimulatorWorkbook(wb);
   if(!parsed.length){ toast('לא נמצאו תלמידות בקובץ'); return; }
   let cls=prompt(`זוהה קובץ סימולטור מקורי עם ${parsed.length} תלמידות.\nלאיזו כיתה לשייך אותן?`, state.classes[0]||'יב');
@@ -8091,6 +8424,7 @@ function importSimulator(wb){
   toast(`הקובץ נקלט! ${added} חדשות, ${updated} עודכנו` + (nr+nb?` · זוהו ${nr} ציונים אדומים (לא דווחו) ו-${nb} כחולים (פיקטיביים)`:''));
 }
 function importExcel(input){
+  if(roGuard()) return;
   const file=input.files[0]; if(!file) return;
   const reader=new FileReader();
   reader.onload=e=>{
@@ -8134,6 +8468,18 @@ function importExcel(input){
                  state.students.push(st); added++; }
         else updated++;
         if(rowTz&&!st.tz) st.tz=rowTz;
+        /* מקבל גם "3" וגם "3 · סיים בהצלחה" וגם את הטקסט לבדו */
+        const soRaw=String(row['מעורבות חברתית']||'').trim();
+        if(soRaw){
+          let sv=+((soRaw.match(/^[1-4]/)||[])[0]||0);
+          /* "סיים בהצלחה" מכיל גם את "סיים" — חייבים להתאים את הארוך ביותר */
+          if(!sv){
+            const hit=SOCIAL.slice().sort((a,b)=>b.t.length-a.t.length)
+                        .find(o=>soRaw.indexOf(o.t)>-1);
+            if(hit) sv=hit.v;
+          }
+          if(sv>=1&&sv<=4) st.social=sv;
+        }
         SUBJECTS.forEach(subj=>{
           const uKey=subj.name+' - יח"ל';
           // 0 הוא ערך תקף — "לא לומדת את המקצוע" — ואסור שייחשב כתא ריק
@@ -8245,6 +8591,7 @@ function lastBackupInfo(){
   try{ const r=LS.getItem('bagrutLastBackup'); if(!r) return null; return JSON.parse(r); }catch(e){ return null; }
 }
 function importJSON(input){
+  if(roGuard()) return;
   const file=input.files[0]; if(!file) return;
   const reader=new FileReader();
   reader.onload=e=>{
@@ -8292,6 +8639,7 @@ function importJSON(input){
 /* ============ נתוני יב תשפ"ו (מהקובץ האמיתי) ============ */
 const EXAMPLE_DATA=[];
 function loadDataset(data,cls,label){
+  if(roGuard()) return;
   if(state.students.length&&!confirm('לטעון את נתוני '+label+' בנוסף לנתונים הקיימים בסימולטור הנוכחי?')) return;
   if(!state.classes.includes(cls)) state.classes.push(cls);
   data.forEach(d=>{
@@ -8304,6 +8652,7 @@ const EXAMPLE_YA=[];
 
 /* ============ נתוני דוגמה ============ */
 function loadDemo(){
+  if(roGuard()) return;
   if(state.students.length&&!confirm('לטעון נתוני דוגמה בנוסף לנתונים הקיימים?')) return;
   const names=['שירה כהן','נעמה לוי','אביגיל פרץ','תהילה מזרחי','הודיה ביטון','רננה דהן','אמונה אזולאי','יעל אוחיון','מוריה חדד','אילה גבאי','צופיה עמר','בת-אל אלבז','נועה שלום','רוני ממן','הדס אטיאס','תמר בן-דוד','אוריה סבן','שקד יוסף','ליאור אברהם','מיכל נחום','אסתר קדוש','חנה טל','רות פנחס','דבורה שרעבי'];
   const classes=['יב-1','יב-2'];
@@ -8557,6 +8906,7 @@ function gx(s){
   }catch(e){}
 })();
 function setGender(which,v){
+  if(roGuard()) return;
   state[which]=v; save(); gxBuild(); render();
   renderHeaderCenter(); renderTabs(); renderProfileBar(); renderSaveInd();
   toast('לשון הפנייה עודכנה');
@@ -8574,7 +8924,7 @@ function genderPanelHtml(){
 /* ============ בדיקת עדכוני גרסה ============
    מקור אמת אחד: APP_VERSION. הבדיקה מורידה את הקובץ עצמו מהשרת בעקיפת מטמון
    ומחלצת ממנו את המספר — כך שאין קובץ נוסף לתחזק, ואי אפשר לשכוח לעדכן מניפסט. */
-const APP_VERSION='18.8';
+const APP_VERSION='19.1';
 const APP_DATE='02.09.2026';
 const UPD_EVERY=20*60*60*1000;           // בדיקה אוטומטית פעם ב-20 שעות
 let latestVer='', updState='idle';       // idle|checking|current|available|error
@@ -8879,7 +9229,7 @@ async function driveWrite(pid,pl){
    בלעדיו אי אפשר להבדיל בין "אני שיניתי" לבין "שניים שינו" — וכל הבדל היה נהפך לשאלה. */
 const MRG_FLD=['grades','gstat','codes','notes','ov','units','mugbarNames','shw','hid','tests','moe'];
 /* שדות שאינם מפה אלא ערך יחיד — לא ניתן למזג אותם מפתח-מפתח */
-const MRG_SCALAR=['tz'];
+const MRG_SCALAR=['tz','social'];
 function baseOf(stt){
   if(!stt) return null;
   return {classes:(stt.classes||[]).slice(), students:(stt.students||[]).map(s=>{
@@ -9381,6 +9731,7 @@ function moePickAll(which){
 }
 function moeClose(){ const el=document.getElementById('cfModal'); if(el) el.classList.remove('show'); moeJob=null; }
 function moeConfirm(){
+  if(roGuard()) return;
   if(!moeJob) return;
   pushUndo('ייבוא ציוני בגרות');
   const r=moeApply(moeJob.diff,moeJob.picks);
@@ -9802,6 +10153,7 @@ function storageStatusHtml(){
   </div>`;
 }
 function factoryReset(){
+  if(roGuard()) return;
   const n=state.students.length, np=profiles.length;
   if(!confirm(`⚠️ איפוס מלא\n\nפעולה זו תמחק לצמיתות ${np} סימולטורים וכל הכיתות והתלמידות שבהם (${n} תלמידות בסימולטור הנוכחי) מהדפדפן במכשיר הזה.\n\nלהמשיך?`)) return;
   if(!confirm('אישור אחרון: הנתונים יימחקו ואי אפשר לשחזר אותם — אלא מקובץ גיבוי.\n\nלמחוק?')) return;
@@ -9821,6 +10173,7 @@ function factoryReset(){
   toast('התוכנה אופסה — נקייה לגמרי');
 }
 function testSave(){
+  if(roGuard()) return;
   const before=state.students.length;
   save();
   let ok=false, msg='';
